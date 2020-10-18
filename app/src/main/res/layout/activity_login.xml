@@ -11,7 +11,6 @@
         android:id="@+id/button"
         android:layout_width="wrap_content"
         android:layout_height="48dp"
-        android:layout_marginBottom="160dp"
         android:background="#FF9800"
         android:onClick="login"
         android:text="LOGIN"
@@ -21,51 +20,55 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.498"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.8" />
 
     <EditText
         android:id="@+id/inputText"
         android:layout_width="210dp"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="124dp"
         android:ems="10"
         android:hint="UID"
         android:inputType="textPersonName"
         app:layout_constraintBottom_toTopOf="@+id/button"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.69"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintHorizontal_bias="0.57"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/include3"
+        app:layout_constraintVertical_bias="0.7" />
 
     <ImageView
         android:id="@+id/imageView"
-        android:layout_width="68dp"
-        android:layout_height="73dp"
-        android:layout_marginBottom="108dp"
-        android:background="#00250505"
-        app:layout_constraintBottom_toTopOf="@+id/button"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.192"
-        app:layout_constraintStart_toStartOf="parent"
-        app:srcCompat="@drawable/user_foreground" />
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginRight="5dp"
+        app:layout_constraintBottom_toBottomOf="@+id/inputText"
+        app:layout_constraintEnd_toStartOf="@+id/inputText"
+        app:layout_constraintTop_toTopOf="@+id/inputText"
+        app:srcCompat="@drawable/user_silhoutte" />
 
     <RadioGroup
         android:id="@+id/radioGrp"
         android:layout_width="223dp"
         android:layout_height="98dp"
-        app:layout_constraintBottom_toTopOf="@+id/inputText"
+        app:layout_constraintBottom_toTopOf="@+id/button"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/include3">
+        app:layout_constraintTop_toBottomOf="@+id/include3"
+        app:layout_constraintVertical_bias="0.32999998">
 
         <RadioButton
             android:id="@+id/radioButton2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:layout_marginBottom="20dp"
+            android:layout_marginBottom="21dp"
             android:checked="true"
             android:gravity="center"
             android:text=" Student"
+            android:textColor="@android:color/black"
             android:textSize="24sp" />
 
         <RadioButton
@@ -74,6 +77,7 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:text=" Teacher"
+            android:textColor="@android:color/black"
             android:textSize="24sp" />
     </RadioGroup>
 

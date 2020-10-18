@@ -47,8 +47,8 @@ public class StudentActivity extends AppCompatActivity {
     Button mBiometricLoginButton;
 
     private ConnectionsClient mConnectionsClient;
-    private String sourceEndpoint;
-    private String destEndpoint;
+    private String sourceEndpoint = null;
+    private String destEndpoint   = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -243,6 +243,12 @@ public class StudentActivity extends AppCompatActivity {
             String msg = new String(receivedBytes);
 
             if(msg.equals("STOP")){
+
+                if(StudentActivity.this.destEndpoint != null){
+                    Payload bytesPayload = Payload.fromBytes( receivedBytes );
+                    StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.destEndpoint, bytesPayload);
+                }
+
                 StudentActivity.this.mConnectionsClient.stopAllEndpoints();
 
                 StudentActivity.this.updateStatus("Attendance Marked!");
