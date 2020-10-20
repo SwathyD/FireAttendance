@@ -7,11 +7,14 @@ import androidx.core.content.ContextCompat;
 import androidx.biometric.BiometricPrompt;
 
 import android.app.VoiceInteractor;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.security.keystore.StrongBoxUnavailableException;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,6 +34,12 @@ import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.concurrent.Executor;
 
 import static android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG;
@@ -50,6 +59,8 @@ public class StudentActivity extends AppCompatActivity {
     private String sourceEndpoint = null;
     private String destEndpoint   = null;
 
+    JSONObject attendanceData = null;
+    LinearLayout studentAttendaceList;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,6 +72,12 @@ public class StudentActivity extends AppCompatActivity {
         UID = getIntent().getStringExtra("key");
         TextView uid = findViewById(R.id.studentUID);
         uid.setText(UID);
+
+        studentAttendaceList = findViewById(R.id.StudentAttendance);
+        setstudentAttendance();
+
+        /* Function Call for Test */
+        updateStudentAttendance("ADS","KKD",4);
 
         mStatusText = findViewById(R.id.textView3);
         mSpinner    = findViewById(R.id.progressBar);
@@ -252,7 +269,9 @@ public class StudentActivity extends AppCompatActivity {
                 StudentActivity.this.mConnectionsClient.stopAllEndpoints();
 
                 StudentActivity.this.updateStatus("Attendance Marked!");
+
                 StudentActivity.this.mSpinner.setVisibility(View.INVISIBLE);
+
             }
 
             Toast.makeText(StudentActivity.this, msg, Toast.LENGTH_SHORT).show();
@@ -349,4 +368,86 @@ public class StudentActivity extends AppCompatActivity {
         Log.i("INFO", "STOPPED ADVERTISING");
         Toast.makeText(StudentActivity.this, "STOPPED ADVERTISING", Toast.LENGTH_SHORT).show();
     }
+
+    /*Get Hashmap which has Student Attendance Data*/
+    private JSONObject getStudentAttendance(){
+        return attendanceData;
+    }
+
+    /*Update Hashmap which has Student Attendance Data and update the shared Prefrence/File Data*/
+    private void updateStudentAttendance(String subject,String teacherCode, int total_lec){
+
+        //Update Hash
+        try {
+            String key = subject + '-' + teacherCode;
+            if (this.attendanceData.has(key)) {
+                JSONObject temp = this.attendanceData.getJSONObject(key);
+                temp.put("total_lec",total_lec);
+                temp.put("present_lec",temp.getInt("present_lec")+1);
+                this.attendanceData.put(key, temp);
+            } else {
+                JSONObject temp = new JSONObject();
+                temp.put("total_lec",total_lec);
+                temp.put("present_lec",1);
+                this.attendanceData.put(key, temp );
+            }
+            //Update Shared Prefrences
+            Iterator<String> keys = this.attendanceData.keys();
+            this.studentAttendaceList.removeAllViews(); 
+            while(keys.hasNext()) {
+                String temp = keys.next();
+                if (this.attendanceData.get(temp) instanceof JSONObject) {
+                    total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
+                    int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
+                    addAttendace(temp+": " + (present_lec) + " / " + total_lec );
+                }
+            }
+            SharedPreferences sharedPreferences = getPreferences(Context.MODE_PRIVATE);
+
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+
+
+            String attendanceDataString = attendanceData.toString();
+            editor.putString("attendanceData", attendanceDataString);
+
+            boolean commit = editor.commit();
+        }catch (Exception e){
+
+        }
+    }
+    private void setstudentAttendance(){
+        try {
+
+            SharedPreferences sharedPreferences = getPreferences(Context.MODE_PRIVATE);
+            String key = "attendanceData";
+            if(sharedPreferences.contains(key)) {
+                String attendanceString = sharedPreferences.getString(key, null);
+                this.attendanceData = new JSONObject(attendanceString);
+
+                Iterator<String> keys = this.attendanceData.keys();
+
+                while(keys.hasNext()) {
+                    String temp = keys.next();
+                    if (this.attendanceData.get(temp) instanceof JSONObject) {
+                        int total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
+                        int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
+                        addAttendace(temp+": " + (present_lec) + " / " + total_lec );
+                    }
+                }
+
+            }
+            else{
+                this.attendanceData = new JSONObject();
+            }
+        }catch (Exception e){
+
+        }
+    }
+
+    public void addAttendace(String text){
+        TextView view = new TextView(this);
+        view.setText(text);
+        this.studentAttendaceList.addView(view);
+    }
 }
+
