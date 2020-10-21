@@ -4,11 +4,15 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Environment;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -28,11 +32,21 @@ import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+
 public class TeacherActivity extends AppCompatActivity {
 
     LinearLayout list;
     private ConnectionsClient mConnectionsClient;
     private String destEndpoint = null;
+    ArrayList<String> student = new ArrayList<>();
+    private String subject, time;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,10 +58,40 @@ public class TeacherActivity extends AppCompatActivity {
         mConnectionsClient = Nearby.getConnectionsClient(this);
     }
 
-    public void addStudent(String text){
+    public void addStudent(String text, String status){
         TextView view = new TextView(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(60,0,0,10);
+        view.setLayoutParams(params);
         view.setText(text);
+        if(status.equals("new"))
+            view.setTextColor(getResources().getColor(R.color.user_background));
+        else if(status.equals("error"))
+            view.setTextColor(Color.parseColor("#F30404"));
+        view.setTextSize(18);
+        view.setOnClickListener(v -> {
+            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+            alert.setTitle("Alert!");
+            alert.setMessage("Unmark "+text+" ?");
+            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                   list.removeView(view);
+                   student.remove(text);
+                }
+            });
+
+            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    //Cancel
+                }
+            });
+
+            alert.show();
+        });
         list.addView(view);
+        student.add(text);
     }
 
     public void manuallyAddStudent(View v){
@@ -61,7 +105,7 @@ public class TeacherActivity extends AppCompatActivity {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 String value = input.getText().toString();
-                addStudent(value);
+                addStudent(value, "new");
             }
         });
 
@@ -100,9 +144,11 @@ public class TeacherActivity extends AppCompatActivity {
             setContentView(R.layout.activity_attendance);
             TextView text = findViewById(R.id.textView6);
             text.setText(subject.getText().toString());
+            this.subject = subject.getText().toString();
 
             text = findViewById(R.id.textView7);
             text.setText(start.getText().toString().concat(" - ").concat(end.getText().toString()));
+            this.time = start.getText().toString().concat(" - ").concat(end.getText().toString());
 
             TeacherActivity.this.list = findViewById(R.id.customList);
 
@@ -121,7 +167,7 @@ public class TeacherActivity extends AppCompatActivity {
 
             Toast.makeText(TeacherActivity.this, msg, Toast.LENGTH_SHORT).show();
 
-            TeacherActivity.this.addStudent(msg);
+            TeacherActivity.this.addStudent(msg, "");
         }
 
         @Override
@@ -221,7 +267,41 @@ public class TeacherActivity extends AppCompatActivity {
     }
 
     public void stopAttendance(View v){
+        createFile();
         Payload bytesPayload = Payload.fromBytes( "STOP".getBytes() );
         TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+
+    }
+
+    public void createFile(){
+        try
+        {
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
+            Date now = new Date();
+            String fileName = formatter.format(now) + ".txt";
+            File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
+            //File root = new File(Environment.getExternalStorageDirectory(), "Notes");
+            if (!root.exists())
+            {
+                root.mkdirs();
+            }
+            File file = new File(root, fileName);
+
+            FileWriter writer = new FileWriter(file,true);
+            writer.append("Subject: "+subject+"\nTime: "+time+"\nStudent List: \n");
+            for(int i=0; i<student.size(); i++){
+                writer.append(student.get(i)+"\n");
+            }
+            writer.append("\n\n\n");
+            writer.flush();
+            writer.close();
+            Toast.makeText(this, "Data has been written to Attendance/"+fileName, Toast.LENGTH_SHORT).show();
+        }
+        catch(IOException e)
+        {
+            e.printStackTrace();
+
+        }
+
     }
 }
