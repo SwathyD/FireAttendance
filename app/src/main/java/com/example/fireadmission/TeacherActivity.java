@@ -27,12 +27,18 @@ import com.google.android.gms.nearby.connection.Payload;
 import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
+import com.google.android.gms.tasks.OnSuccessListener;
+
+import org.json.JSONObject;
 
 public class TeacherActivity extends AppCompatActivity {
 
     LinearLayout list;
     private ConnectionsClient mConnectionsClient;
     private String destEndpoint = null;
+    private String subject = null;
+    private String time_slot = null;
+    private String prof = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +46,8 @@ public class TeacherActivity extends AppCompatActivity {
         setContentView(R.layout.activity_teacher);
         ActionBar actionBar = getSupportActionBar();
         actionBar.hide();
+
+        prof = getIntent().getStringExtra("key");
 
         mConnectionsClient = Nearby.getConnectionsClient(this);
     }
@@ -57,19 +65,13 @@ public class TeacherActivity extends AppCompatActivity {
 
         final EditText input = new EditText(this);
         alert.setView(input);
-        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String value = input.getText().toString();
-                addStudent(value);
-            }
+        alert.setPositiveButton("Ok", (dialog, which) -> {
+            String value = input.getText().toString();
+            addStudent(value);
         });
 
-        alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                //Cancel
-            }
+        alert.setNegativeButton("Cancel", (dialog, which) -> {
+            //Cancel
         });
 
         alert.show();
@@ -80,6 +82,7 @@ public class TeacherActivity extends AppCompatActivity {
         EditText subject = findViewById(R.id.subject);
         EditText start = findViewById(R.id.start_time);
         EditText end = findViewById(R.id.end_time);
+
         boolean flag = true;
         if(TextUtils.isEmpty(subject.getText()))   {
             subject.setError("Enter Subject");
@@ -98,11 +101,15 @@ public class TeacherActivity extends AppCompatActivity {
 
         if(flag){
             setContentView(R.layout.activity_attendance);
-            TextView text = findViewById(R.id.textView6);
-            text.setText(subject.getText().toString());
 
-            text = findViewById(R.id.textView7);
-            text.setText(start.getText().toString().concat(" - ").concat(end.getText().toString()));
+            TeacherActivity.this.subject = subject.getText().toString();
+            TeacherActivity.this.time_slot = start.getText().toString() + " - " + end.getText().toString();
+
+            ((TextView)findViewById(R.id.textView6))
+            .setText( TeacherActivity.this.subject );
+
+            ((TextView)findViewById(R.id.textView7))
+            .setText( TeacherActivity.this.time_slot );
 
             TeacherActivity.this.list = findViewById(R.id.customList);
 
@@ -115,19 +122,55 @@ public class TeacherActivity extends AppCompatActivity {
 
         @Override
         public void onPayloadReceived(String endpointId, Payload payload) {
-            byte[] receivedBytes = payload.asBytes();
+            try{
+                byte[] receivedBytes = payload.asBytes();
+                String msg = new String(receivedBytes);
+                JSONObject data = new JSONObject(msg);
 
-            String msg = new String(receivedBytes);
+                switch(data.getString("msg_type")){
+                    case "MARK":
+                            TeacherActivity.this.process_MARK_Message(data);
+                        break;
 
-            Toast.makeText(TeacherActivity.this, msg, Toast.LENGTH_SHORT).show();
+                    default:
+                        Log.e("FAIL", "UNEXPECTED MESSAGE TYPE RECEIVED "+ data.getString("msg_type"));
+                }
 
-            TeacherActivity.this.addStudent(msg);
+            }catch(Exception e){
+                Log.e("FAIL", "ERROR WHILE RECEIVING MESSAGE ", e);
+            }
         }
 
         @Override
         public void onPayloadTransferUpdate(String endpointId, PayloadTransferUpdate update) {
             // Bytes payloads are sent as a single chunk, so you'll receive a SUCCESS update immediately
             // after the call to onPayloadReceived().
+        }
+    }
+
+    private void send_ACK_Message(String endpointId, String status) {
+        try{
+            JSONObject response = new JSONObject();
+            response.put("msg_type", "ACK");
+            response.put("status"  , status);
+            response.put("dest"    , endpointId);
+
+            Payload bytesPayload = Payload.fromBytes( response.toString().getBytes() );
+            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+
+        }catch(Exception e){
+            Log.e("FAIL", "ERROR WHEN SENDING ACK", e);
+        }
+    }
+
+    private void process_MARK_Message(JSONObject data) {
+        // auth code se dekhke authenticate karna hai
+        try{
+            TeacherActivity.this.addStudent(data.getString("uid"));
+
+            send_ACK_Message(data.getString("source"), "MARKED:"+getAlphaNumericString(10));
+        }catch(Exception e){
+            Log.e("FAIL", "ERROR WHEN PROCESSING MARK", e);
         }
     }
 
@@ -153,6 +196,8 @@ public class TeacherActivity extends AppCompatActivity {
 
                             stopDiscovery();
 
+                            TeacherActivity.this.send_INIT_Message();
+
                             break;
                         case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
                             Log.i("INFO", "DISCOVER CONNECTION RESULT REJECTED");
@@ -174,6 +219,24 @@ public class TeacherActivity extends AppCompatActivity {
                     TeacherActivity.this.destEndpoint = null;
                 }
             };
+
+    private void send_INIT_Message() {
+        try {
+            JSONObject attendance_context = new JSONObject();
+
+            attendance_context.put("msg_type" , "INIT");
+            attendance_context.put("prof"     , TeacherActivity.this.prof);
+            attendance_context.put("subject"  , TeacherActivity.this.subject);
+            attendance_context.put("time_slot", TeacherActivity.this.time_slot);
+            attendance_context.put("whoami"   , TeacherActivity.this.destEndpoint);
+
+            Payload bytesPayload = Payload.fromBytes( attendance_context.toString().getBytes() );
+            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+
+        } catch (Exception e) {
+            Log.e("FAIL", "EXCEPTION WHILE SENDING INIT MESSAGE", e);
+        }
+    }
 
     private void startDiscovery() {
         EndpointDiscoveryCallback endpointDiscoveryCallback =
@@ -221,7 +284,46 @@ public class TeacherActivity extends AppCompatActivity {
     }
 
     public void stopAttendance(View v){
-        Payload bytesPayload = Payload.fromBytes( "STOP".getBytes() );
-        TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+        send_STOP_Message();
+    }
+
+    private void send_STOP_Message(){
+        try{
+            JSONObject obj = new JSONObject();
+            obj.put("msg_type", "STOP");
+
+            Payload bytesPayload = Payload.fromBytes( obj.toString().getBytes() );
+            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload).addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+                    TeacherActivity.this.mConnectionsClient.stopAllEndpoints();
+                }
+            });
+        }catch(Exception e){
+            Log.e("FAIL", "FAILED WHILE SENDING STOP MESSAGE", e);
+        }
+    }
+
+    static String getAlphaNumericString(int n)
+    {
+        // chose a Character random from this String
+        String AlphaNumericString = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                    + "0123456789"
+                                    + "abcdefghijklmnopqrstuvwxyz";
+
+        // create StringBuffer size of AlphaNumericString
+        StringBuilder sb = new StringBuilder(n);
+
+        for (int i = 0; i < n; i++) {
+
+            // generate a random number between
+            // 0 to AlphaNumericString variable length
+            int index  = (int)(AlphaNumericString.length() * Math.random());
+
+            // add Character one by one in end of sb
+            sb.append( AlphaNumericString.charAt(index) );
+        }
+
+        return sb.toString();
     }
 }

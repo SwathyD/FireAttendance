@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">FireAdmission</string>
+    <string name="app_name">FireAttendance</string>
     <!-- Strings related to login -->
     <string name="prompt_email">Email</string>
     <string name="prompt_password">Password</string>

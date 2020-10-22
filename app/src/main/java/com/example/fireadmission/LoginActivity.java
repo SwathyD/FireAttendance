@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.EditText;
@@ -22,6 +23,9 @@ import android.widget.TextView;
 
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.ConnectionsClient;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class LoginActivity extends AppCompatActivity {
 
