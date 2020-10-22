@@ -6,11 +6,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.biometric.BiometricPrompt;
 
-import android.app.VoiceInteractor;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
-import android.security.keystore.StrongBoxUnavailableException;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -34,16 +33,10 @@ import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 
-import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.concurrent.Executor;
-
-import static android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG;
-import static android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL;
 
 public class StudentActivity extends AppCompatActivity {
 
@@ -60,7 +53,7 @@ public class StudentActivity extends AppCompatActivity {
     private String destEndpoint   = null;
 
     JSONObject attendanceData = null;
-    LinearLayout studentAttendaceList;
+    LinearLayout studentAttendanceList;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -73,11 +66,12 @@ public class StudentActivity extends AppCompatActivity {
         TextView uid = findViewById(R.id.studentUID);
         uid.setText(UID);
 
-        studentAttendaceList = findViewById(R.id.StudentAttendance);
+        studentAttendanceList = findViewById(R.id.StudentAttendance);
+
         setstudentAttendance();
 
         /* Function Call for Test */
-        updateStudentAttendance("ADS","KKD",4);
+        updateStudentAttendance("SE","RSM",2);
 
         mStatusText = findViewById(R.id.textView3);
         mSpinner    = findViewById(R.id.progressBar);
@@ -393,13 +387,13 @@ public class StudentActivity extends AppCompatActivity {
             }
             //Update Shared Prefrences
             Iterator<String> keys = this.attendanceData.keys();
-            this.studentAttendaceList.removeAllViews(); 
+            this.studentAttendanceList.removeAllViews();
             while(keys.hasNext()) {
                 String temp = keys.next();
                 if (this.attendanceData.get(temp) instanceof JSONObject) {
                     total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
                     int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
-                    addAttendace(temp+": " + (present_lec) + " / " + total_lec );
+                    addAttendace(temp, present_lec, total_lec );
                 }
             }
             SharedPreferences sharedPreferences = getPreferences(Context.MODE_PRIVATE);
@@ -431,7 +425,7 @@ public class StudentActivity extends AppCompatActivity {
                     if (this.attendanceData.get(temp) instanceof JSONObject) {
                         int total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
                         int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
-                        addAttendace(temp+": " + (present_lec) + " / " + total_lec );
+                        addAttendace(temp, present_lec, total_lec );
                     }
                 }
 
@@ -444,10 +438,19 @@ public class StudentActivity extends AppCompatActivity {
         }
     }
 
-    public void addAttendace(String text){
+    public void addAttendace(String sub, int present_lec, int total_lec){
         TextView view = new TextView(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(60,0,0,10);
+        view.setLayoutParams(params);
+        String text = sub+": " + (present_lec) + " / " + total_lec;
         view.setText(text);
-        this.studentAttendaceList.addView(view);
+        if((float)present_lec/(float)total_lec<0.75){
+            view.setTextColor(Color.parseColor("#F30404"));
+        }
+
+        view.setTextSize(18);
+        this.studentAttendanceList.addView(view);
     }
 }
 

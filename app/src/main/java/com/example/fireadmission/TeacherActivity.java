@@ -6,7 +6,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -47,6 +49,7 @@ public class TeacherActivity extends AppCompatActivity {
     private String destEndpoint = null;
     ArrayList<String> student = new ArrayList<>();
     private String subject, time;
+    String email;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +57,7 @@ public class TeacherActivity extends AppCompatActivity {
         setContentView(R.layout.activity_teacher);
         ActionBar actionBar = getSupportActionBar();
         actionBar.hide();
+        email = getIntent().getStringExtra("key");
 
         mConnectionsClient = Nearby.getConnectionsClient(this);
     }
@@ -68,6 +72,8 @@ public class TeacherActivity extends AppCompatActivity {
             view.setTextColor(getResources().getColor(R.color.user_background));
         else if(status.equals("error"))
             view.setTextColor(Color.parseColor("#F30404"));
+        else if(status.equals("warning"))
+            view.setTextColor(Color.parseColor("#FF9800"));
         view.setTextSize(18);
         view.setOnClickListener(v -> {
             AlertDialog.Builder alert = new AlertDialog.Builder(this);
@@ -296,6 +302,25 @@ public class TeacherActivity extends AppCompatActivity {
             writer.flush();
             writer.close();
             Toast.makeText(this, "Data has been written to Attendance/"+fileName, Toast.LENGTH_SHORT).show();
+            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+            alert.setTitle("Email");
+            alert.setMessage("Do you want to proceed with sending the file through email?");
+            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    sendEmail(fileName);
+                }
+            });
+
+            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    //Cancel
+                }
+            });
+
+            alert.show();
+
         }
         catch(IOException e)
         {
@@ -303,5 +328,24 @@ public class TeacherActivity extends AppCompatActivity {
 
         }
 
+    }
+
+    public void sendEmail(String fileName){
+        Intent emailIntent = new Intent(Intent.ACTION_SEND);
+        emailIntent.setType("text/plain");
+        emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[] {email});
+        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Attendance report for "+subject);
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
+        emailIntent.putExtra(Intent.EXTRA_TEXT, "Attendance Report: \nDate: "+formatter.format(new Date())+"\nTime: "+time);
+        File root = Environment.getExternalStorageDirectory();
+        String pathToMyAttachedFile = "Attendance/"+fileName;
+        File file = new File(root, pathToMyAttachedFile);
+        if (!file.exists() || !file.canRead()) {
+            Toast.makeText(this, "Could not attach the file "+fileName, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Uri uri = Uri.fromFile(file);
+        emailIntent.putExtra(Intent.EXTRA_STREAM, uri);
+        startActivity(Intent.createChooser(emailIntent, "Pick an Email provider"));
     }
 }
