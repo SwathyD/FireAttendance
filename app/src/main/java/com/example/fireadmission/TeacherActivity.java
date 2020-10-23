@@ -5,12 +5,19 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,6 +38,13 @@ import com.google.android.gms.tasks.OnSuccessListener;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+
 public class TeacherActivity extends AppCompatActivity {
 
     LinearLayout list;
@@ -39,6 +53,14 @@ public class TeacherActivity extends AppCompatActivity {
     private String subject = null;
     private String time_slot = null;
     private String prof = null;
+    
+    ArrayList<String> student = new ArrayList<>();
+    Executor listener = new Executor() {
+        @Override
+        public void execute(View v) {
+            TeacherActivity.this.list.removeView(v);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,10 +74,54 @@ public class TeacherActivity extends AppCompatActivity {
         mConnectionsClient = Nearby.getConnectionsClient(this);
     }
 
-    public void addStudent(String text){
-        TextView view = new TextView(this);
-        view.setText(text);
-        list.addView(view);
+
+
+    public void addStudent(String text, String status){
+        CustomView v1 = new CustomView(this, text, status);
+        v1.setOnDeleteListener(listener);
+        list.addView(v1);
+        final Handler handlerUI = new Handler(Looper.getMainLooper());
+        Runnable r = new Runnable() {
+            public void run() {
+                ((ScrollView)findViewById(R.id.scrollView)).fullScroll(View.FOCUS_DOWN);
+            }
+        };
+        handlerUI.post(r);
+//        TextView view = new TextView(this);
+//        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+//        params.setMargins(60,0,0,10);
+//        view.setLayoutParams(params);
+//        view.setText(text);
+//        if(status.equals("new"))
+//            view.setTextColor(getResources().getColor(R.color.user_background));
+//        else if(status.equals("error"))
+//            view.setTextColor(Color.parseColor("#F30404"));
+//        else if(status.equals("warning"))
+//            view.setTextColor(Color.parseColor("#FF9800"));
+//        view.setTextSize(18);
+//        view.setOnClickListener(v -> {
+//            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+//            alert.setTitle("Alert!");
+//            alert.setMessage("Unmark "+text+" ?");
+//            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+//                @Override
+//                public void onClick(DialogInterface dialog, int which) {
+//                   list.removeView(view);
+//                   student.remove(text);
+//                }
+//            });
+//
+//            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+//                @Override
+//                public void onClick(DialogInterface dialog, int which) {
+//                    //Cancel
+//                }
+//            });
+//
+//            alert.show();
+//        });
+//        list.addView(view);
+        student.add(text);
     }
 
     public void manuallyAddStudent(View v){
@@ -65,9 +131,12 @@ public class TeacherActivity extends AppCompatActivity {
 
         final EditText input = new EditText(this);
         alert.setView(input);
-        alert.setPositiveButton("Ok", (dialog, which) -> {
-            String value = input.getText().toString();
-            addStudent(value);
+        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String value = input.getText().toString();
+                addStudent(value, "new");
+            }
         });
 
         alert.setNegativeButton("Cancel", (dialog, which) -> {
@@ -102,7 +171,7 @@ public class TeacherActivity extends AppCompatActivity {
         if(flag){
             setContentView(R.layout.activity_attendance);
 
-            TeacherActivity.this.subject = subject.getText().toString();
+            TeacherActivity.this.subject   = subject.getText().toString();
             TeacherActivity.this.time_slot = start.getText().toString() + " - " + end.getText().toString();
 
             ((TextView)findViewById(R.id.textView6))
@@ -111,7 +180,7 @@ public class TeacherActivity extends AppCompatActivity {
             ((TextView)findViewById(R.id.textView7))
             .setText( TeacherActivity.this.time_slot );
 
-            TeacherActivity.this.list = findViewById(R.id.customList);
+            TeacherActivity.this.list = findViewById(R.id.list);
 
             startDiscovery();
         }
@@ -166,7 +235,7 @@ public class TeacherActivity extends AppCompatActivity {
     private void process_MARK_Message(JSONObject data) {
         // auth code se dekhke authenticate karna hai
         try{
-            TeacherActivity.this.addStudent(data.getString("uid"));
+            TeacherActivity.this.addStudent(data.getString("uid"), "normal");
 
             send_ACK_Message(data.getString("source"), "MARKED:"+getAlphaNumericString(10));
         }catch(Exception e){
@@ -285,6 +354,8 @@ public class TeacherActivity extends AppCompatActivity {
 
     public void stopAttendance(View v){
         send_STOP_Message();
+        
+        createFile();
     }
 
     private void send_STOP_Message(){
@@ -325,5 +396,75 @@ public class TeacherActivity extends AppCompatActivity {
         }
 
         return sb.toString();
+    }
+
+    public void createFile(){
+        try
+        {
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
+            Date now = new Date();
+            String fileName = formatter.format(now) + "_"+TeacherActivity.this.time_slot.split("-")[0].replaceAll(" ","")+ ".csv";
+            File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
+            //File root = new File(Environment.getExternalStorageDirectory(), "Notes");
+            if (!root.exists())
+            {
+                root.mkdirs();
+            }
+            File file = new File(root, fileName);
+
+            FileWriter writer = new FileWriter(file,true);
+            writer.append("Subject: "+subject+"\nTime: "+TeacherActivity.this.time_slot+"\nStudent List: \n");
+            for(int i=0; i<student.size(); i++){
+                writer.append(student.get(i)+"\n");
+            }
+            writer.append("\n\n\n");
+            writer.flush();
+            writer.close();
+            Toast.makeText(this, "Data has been written to Attendance/"+fileName, Toast.LENGTH_SHORT).show();
+            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+            alert.setTitle("Email");
+            alert.setMessage("Do you want to proceed with sending the file through email?");
+            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    sendEmail(fileName);
+                }
+            });
+
+            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    //Cancel
+                }
+            });
+
+            alert.show();
+
+        }
+        catch(IOException e)
+        {
+            e.printStackTrace();
+
+        }
+
+    }
+
+    public void sendEmail(String fileName){
+        Intent emailIntent = new Intent(Intent.ACTION_SEND);
+        emailIntent.setType("text/plain");
+        emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[] {TeacherActivity.this.prof});
+        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Attendance report for "+subject);
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
+        emailIntent.putExtra(Intent.EXTRA_TEXT, "Attendance Report: \nDate: "+formatter.format(new Date())+"\nTime: "+TeacherActivity.this.time_slot);
+        File root = Environment.getExternalStorageDirectory();
+        String pathToMyAttachedFile = "Attendance/"+fileName;
+        File file = new File(root, pathToMyAttachedFile);
+        if (!file.exists() || !file.canRead()) {
+            Toast.makeText(this, "Could not attach the file "+fileName, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Uri uri = Uri.fromFile(file);
+        emailIntent.putExtra(Intent.EXTRA_STREAM, uri);
+        startActivity(Intent.createChooser(emailIntent, "Share Attendance Records via"));
     }
 }
