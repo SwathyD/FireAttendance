@@ -4,19 +4,20 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,7 +36,6 @@ import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -50,6 +50,12 @@ public class TeacherActivity extends AppCompatActivity {
     ArrayList<String> student = new ArrayList<>();
     private String subject, time;
     String email;
+    Executor listener = new Executor() {
+        @Override
+        public void execute(View v) {
+            TeacherActivity.this.list.removeView(v);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,41 +68,53 @@ public class TeacherActivity extends AppCompatActivity {
         mConnectionsClient = Nearby.getConnectionsClient(this);
     }
 
+
+
     public void addStudent(String text, String status){
-        TextView view = new TextView(this);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMargins(60,0,0,10);
-        view.setLayoutParams(params);
-        view.setText(text);
-        if(status.equals("new"))
-            view.setTextColor(getResources().getColor(R.color.user_background));
-        else if(status.equals("error"))
-            view.setTextColor(Color.parseColor("#F30404"));
-        else if(status.equals("warning"))
-            view.setTextColor(Color.parseColor("#FF9800"));
-        view.setTextSize(18);
-        view.setOnClickListener(v -> {
-            AlertDialog.Builder alert = new AlertDialog.Builder(this);
-            alert.setTitle("Alert!");
-            alert.setMessage("Unmark "+text+" ?");
-            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                   list.removeView(view);
-                   student.remove(text);
-                }
-            });
-
-            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    //Cancel
-                }
-            });
-
-            alert.show();
-        });
-        list.addView(view);
+        CustomView v1 = new CustomView(this, text, status);
+        v1.setOnDeleteListener(listener);
+        list.addView(v1);
+        final Handler handlerUI = new Handler(Looper.getMainLooper());
+        Runnable r = new Runnable() {
+            public void run() {
+                ((ScrollView)findViewById(R.id.scrollView)).fullScroll(View.FOCUS_DOWN);
+            }
+        };
+        handlerUI.post(r);
+//        TextView view = new TextView(this);
+//        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+//        params.setMargins(60,0,0,10);
+//        view.setLayoutParams(params);
+//        view.setText(text);
+//        if(status.equals("new"))
+//            view.setTextColor(getResources().getColor(R.color.user_background));
+//        else if(status.equals("error"))
+//            view.setTextColor(Color.parseColor("#F30404"));
+//        else if(status.equals("warning"))
+//            view.setTextColor(Color.parseColor("#FF9800"));
+//        view.setTextSize(18);
+//        view.setOnClickListener(v -> {
+//            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+//            alert.setTitle("Alert!");
+//            alert.setMessage("Unmark "+text+" ?");
+//            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+//                @Override
+//                public void onClick(DialogInterface dialog, int which) {
+//                   list.removeView(view);
+//                   student.remove(text);
+//                }
+//            });
+//
+//            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+//                @Override
+//                public void onClick(DialogInterface dialog, int which) {
+//                    //Cancel
+//                }
+//            });
+//
+//            alert.show();
+//        });
+//        list.addView(view);
         student.add(text);
     }
 
@@ -156,7 +174,7 @@ public class TeacherActivity extends AppCompatActivity {
             text.setText(start.getText().toString().concat(" - ").concat(end.getText().toString()));
             this.time = start.getText().toString().concat(" - ").concat(end.getText().toString());
 
-            TeacherActivity.this.list = findViewById(R.id.customList);
+            TeacherActivity.this.list = findViewById(R.id.list);
 
             startDiscovery();
         }
@@ -284,7 +302,7 @@ public class TeacherActivity extends AppCompatActivity {
         {
             SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
             Date now = new Date();
-            String fileName = formatter.format(now) + ".txt";
+            String fileName = formatter.format(now) + "_"+time.split("-")[0].replaceAll(" ","")+ ".csv";
             File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
             //File root = new File(Environment.getExternalStorageDirectory(), "Notes");
             if (!root.exists())

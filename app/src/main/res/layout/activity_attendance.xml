@@ -36,6 +36,7 @@
         android:id="@+id/floatingActionButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
         android:layout_marginEnd="26dp"
         android:layout_marginRight="26dp"
         android:clickable="true"
@@ -46,6 +47,7 @@
         app:layout_constraintBottom_toTopOf="@+id/relativeLayout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/include"
+        app:layout_constraintVertical_bias="0.7"
         app:srcCompat="@drawable/user_foreground" />
 
     <include
@@ -74,6 +76,7 @@
         app:layout_constraintStart_toStartOf="parent" />
 
     <ScrollView
+        android:id="@+id/scrollView"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="100dp"
@@ -84,7 +87,7 @@
         app:layout_constraintTop_toBottomOf="@+id/include">
 
         <LinearLayout
-            android:id="@+id/customList"
+            android:id="@+id/list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
