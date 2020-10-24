@@ -35,14 +35,19 @@ import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.concurrent.Executor;
 
 public class StudentActivity extends AppCompatActivity {
+
+    private int maxConnections = 2;
 
     private String UID;
     private Executor executor;
@@ -67,7 +72,7 @@ public class StudentActivity extends AppCompatActivity {
 
     private ConnectionsClient mConnectionsClient;
     private String sourceEndpoint = null;
-    private String destEndpoint   = null;
+    private ArrayList<String> destEndpoints = new ArrayList<>();
 
     JSONObject attendanceData = null;
     LinearLayout studentAttendanceList;
@@ -157,7 +162,7 @@ public class StudentActivity extends AppCompatActivity {
 
                 switch(data.getString("msg_type")){
                     case "MARK":
-                            StudentActivity.this.process_MARK_Message(endpointId, data.getString("source"));
+                            StudentActivity.this.process_MARK_Message(endpointId, data.getString("uid"));
                             StudentActivity.this.relay_MARK_Message(receivedBytes);
                         break;
                     default:
@@ -176,9 +181,8 @@ public class StudentActivity extends AppCompatActivity {
         }
     }
 
-    private void process_MARK_Message(String from, String dest){
-        // StudentActivity.this.relay_table.put(dest, from);
-        // future mein jab multiple connections ho sakenge tab ye implement karna hoga
+    private void process_MARK_Message(String fromEndpointId, String destUid){
+         StudentActivity.this.relay_table.put(destUid, fromEndpointId);
     }
 
     private void relay_MARK_Message(byte[] data){
@@ -192,7 +196,7 @@ public class StudentActivity extends AppCompatActivity {
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i("INFO", "DISCOVER CONNECTION INITIATED");
 
-                    if(StudentActivity.this.destEndpoint == null){
+                    if(StudentActivity.this.destEndpoints.size() < StudentActivity.this.maxConnections - 1){
                         Nearby.getConnectionsClient(StudentActivity.this).acceptConnection(endpointId, new DiscoverReceiveBytesPayloadListener());
                     }
                 }
@@ -202,13 +206,16 @@ public class StudentActivity extends AppCompatActivity {
 
                     switch (result.getStatus().getStatusCode()) {
                         case ConnectionsStatusCodes.STATUS_OK:
-                            StudentActivity.this.destEndpoint = endpointId;
+                            StudentActivity.this.destEndpoints.add( endpointId );
+
                             Log.i("INFO", "DISCOVER CONNECTION RESULT OK");
                             Toast.makeText(StudentActivity.this, "DISCOVER CONNECTION RESULT OK", Toast.LENGTH_SHORT).show();
 
-                            stopDiscovery();
+                            if(StudentActivity.this.destEndpoints.size() == StudentActivity.this.maxConnections - 1){
+                                stopDiscovery();
+                            }
 
-                            StudentActivity.this.send_INIT_Message();
+                            StudentActivity.this.send_INIT_Message(endpointId);
 
                             break;
                         case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
@@ -228,11 +235,11 @@ public class StudentActivity extends AppCompatActivity {
                 public void onDisconnected(String endpointId) {
                     Log.e("FAIL", "DISCOVER DISCONNECTED FROM ENDPOINT " + endpointId);
 
-                    StudentActivity.this.destEndpoint = null;
+                    StudentActivity.this.destEndpoints.remove(endpointId);
                 }
             };
 
-    private void send_INIT_Message() {
+    private void send_INIT_Message(String endpointId) {
         try {
             JSONObject attendance_context = new JSONObject();
 
@@ -240,10 +247,10 @@ public class StudentActivity extends AppCompatActivity {
             attendance_context.put("prof"     , StudentActivity.this.prof);
             attendance_context.put("subject"  , StudentActivity.this.subject);
             attendance_context.put("time_slot", StudentActivity.this.time_slot);
-            attendance_context.put("whoami"   , StudentActivity.this.destEndpoint);
+            attendance_context.put("whoami"   , endpointId);
 
             Payload bytesPayload = Payload.fromBytes( attendance_context.toString().getBytes() );
-            StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.destEndpoint, bytesPayload);
+            StudentActivity.this.mConnectionsClient.sendPayload(endpointId, bytesPayload);
 
         } catch (Exception e) {
             Log.e("FAIL", "EXCEPTION WHILE SENDING INIT MESSAGE", e);
@@ -316,10 +323,10 @@ public class StudentActivity extends AppCompatActivity {
                         break;
 
                     case "ACK":
-                            if(data.getString("dest").equals(StudentActivity.this.self_endpointId)){
+                            if(data.getString("destUid").equals(StudentActivity.this.UID)){
                                 StudentActivity.this.process_ACK_Message(data);
                             }else{
-                                StudentActivity.this.relay_ACK_Message(data.getString("dest"), receivedBytes);
+                                StudentActivity.this.relay_ACK_Message(data.getString("destUid"), receivedBytes);
                             }
                         break;
 
@@ -340,19 +347,20 @@ public class StudentActivity extends AppCompatActivity {
         }
     }
 
-    private void relay_ACK_Message(String dest, byte[] data) {
-        // String next_hop = StudentActivity.this.relay_table.get(dest);
-        // jab future mein multiple connections hoyenge tab next_hop identify karna padega, abhi since ek hi hai isliye directly usko forward kar sakte hai
+    private void relay_ACK_Message(String destUid, byte[] data) {
+         String next_hop = StudentActivity.this.relay_table.get(destUid);
 
         Payload bytesPayload = Payload.fromBytes( data );
-        StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.destEndpoint, bytesPayload);
+        StudentActivity.this.mConnectionsClient.sendPayload(next_hop, bytesPayload);
     }
 
     private void process_ACK_Message(JSONObject data) {
         // data store karna hai jo user ko dikhega when STOP trigger hoga
         try{
             StudentActivity.this.attendance_status = data.getString("status");
-            updateStudentAttendance("SE","RSM",2);
+
+            updateStudentAttendance(StudentActivity.this.subject,StudentActivity.this.prof,2);
+
         }catch(Exception ex){
             StudentActivity.this.attendance_status = "ERROR";
 
@@ -361,19 +369,25 @@ public class StudentActivity extends AppCompatActivity {
     }
 
     private void process_STOP_Message(JSONObject data){
-        if(StudentActivity.this.destEndpoint != null){
-            Payload bytesPayload = Payload.fromBytes( data.toString().getBytes() );
-            StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.destEndpoint, bytesPayload).addOnSuccessListener(new OnSuccessListener<Void>() {
-                @Override
-                public void onSuccess(Void aVoid) {
-                    StudentActivity.this.mConnectionsClient.stopAllEndpoints();
-                    StudentActivity.this.afterMarked();
-                }
-            });
-        }else{
-            StudentActivity.this.mConnectionsClient.stopAllEndpoints();
-            StudentActivity.this.afterMarked();
+        ArrayList<Task<Void>> all_msgs = new ArrayList<>();
+        byte[] bytes_payload = data.toString().getBytes();
+
+        for(String endpointID : StudentActivity.this.destEndpoints){
+            Payload payload = Payload.fromBytes(bytes_payload);
+
+            Task<Void> msg = StudentActivity.this.mConnectionsClient.sendPayload(endpointID, payload);
+
+            all_msgs.add(msg);
         }
+
+        Tasks.whenAll(all_msgs).addOnSuccessListener(new OnSuccessListener<Void>() {
+            @Override
+            public void onSuccess(Void aVoid) {
+                StudentActivity.this.mConnectionsClient.stopAllEndpoints();
+                StudentActivity.this.afterMarked();
+            }
+        });
+
     }
 
     private void process_INIT_Message(JSONObject data){
@@ -386,6 +400,22 @@ public class StudentActivity extends AppCompatActivity {
             updateStatus(StudentActivity.this.subject + " ("+StudentActivity.this.prof+")\n\n"+StudentActivity.this.time_slot);
         }catch(Exception e){
             Log.e("FAIL", "ERROR WHILE PARSING INIT MESSAGE", e);
+        }
+    }
+
+    private void send_MARK_Message() {
+        try {
+            JSONObject mark = new JSONObject();
+
+            mark.put("msg_type" , "MARK");
+            mark.put("uid"      , StudentActivity.this.UID);
+            mark.put("source"   , StudentActivity.this.self_endpointId);
+
+            Payload bytesPayload = Payload.fromBytes( mark.toString().getBytes() );
+            StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
+
+        } catch (Exception e) {
+            Log.e("FAIL", "EXCEPTION WHILE SENDING INIT MESSAGE", e);
         }
     }
 
@@ -449,22 +479,6 @@ public class StudentActivity extends AppCompatActivity {
 
     private void updateStatus(String s) {
         StudentActivity.this.mStatusText.setText(s);
-    }
-
-    private void send_MARK_Message() {
-        try {
-            JSONObject mark = new JSONObject();
-
-            mark.put("msg_type" , "MARK");
-            mark.put("uid"      , StudentActivity.this.UID);
-            mark.put("source"   , StudentActivity.this.self_endpointId);
-
-            Payload bytesPayload = Payload.fromBytes( mark.toString().getBytes() );
-            StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
-
-        } catch (Exception e) {
-            Log.e("FAIL", "EXCEPTION WHILE SENDING INIT MESSAGE", e);
-        }
     }
 
     private void startAdvertising() {

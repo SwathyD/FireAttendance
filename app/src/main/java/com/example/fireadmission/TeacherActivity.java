@@ -6,7 +6,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -35,6 +34,8 @@ import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 
 import org.json.JSONObject;
 
@@ -44,16 +45,20 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 
 public class TeacherActivity extends AppCompatActivity {
 
+    private int maxConnections = 2;
+
     LinearLayout list;
     private ConnectionsClient mConnectionsClient;
-    private String destEndpoint = null;
+    private ArrayList<String> destEndpoints = new ArrayList<>();
     private String subject = null;
     private String time_slot = null;
     private String prof = null;
-    
+    private HashMap<String, String> relay_table;
+
     ArrayList<String> student = new ArrayList<>();
     Executor listener = new Executor() {
         @Override
@@ -77,9 +82,10 @@ public class TeacherActivity extends AppCompatActivity {
 
 
     public void addStudent(String text, String status){
-        CustomView v1 = new CustomView(this, text, status);
-        v1.setOnDeleteListener(listener);
-        list.addView(v1);
+        CustomView v = new CustomView(this, text, status);
+        v.setOnDeleteListener(listener);
+        list.addView(v);
+
         final Handler handlerUI = new Handler(Looper.getMainLooper());
         Runnable r = new Runnable() {
             public void run() {
@@ -87,40 +93,7 @@ public class TeacherActivity extends AppCompatActivity {
             }
         };
         handlerUI.post(r);
-//        TextView view = new TextView(this);
-//        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-//        params.setMargins(60,0,0,10);
-//        view.setLayoutParams(params);
-//        view.setText(text);
-//        if(status.equals("new"))
-//            view.setTextColor(getResources().getColor(R.color.user_background));
-//        else if(status.equals("error"))
-//            view.setTextColor(Color.parseColor("#F30404"));
-//        else if(status.equals("warning"))
-//            view.setTextColor(Color.parseColor("#FF9800"));
-//        view.setTextSize(18);
-//        view.setOnClickListener(v -> {
-//            AlertDialog.Builder alert = new AlertDialog.Builder(this);
-//            alert.setTitle("Alert!");
-//            alert.setMessage("Unmark "+text+" ?");
-//            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
-//                @Override
-//                public void onClick(DialogInterface dialog, int which) {
-//                   list.removeView(view);
-//                   student.remove(text);
-//                }
-//            });
-//
-//            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
-//                @Override
-//                public void onClick(DialogInterface dialog, int which) {
-//                    //Cancel
-//                }
-//            });
-//
-//            alert.show();
-//        });
-//        list.addView(view);
+
         student.add(text);
     }
 
@@ -198,7 +171,7 @@ public class TeacherActivity extends AppCompatActivity {
 
                 switch(data.getString("msg_type")){
                     case "MARK":
-                            TeacherActivity.this.process_MARK_Message(data);
+                            TeacherActivity.this.process_MARK_Message(data, endpointId);
                         break;
 
                     default:
@@ -217,27 +190,30 @@ public class TeacherActivity extends AppCompatActivity {
         }
     }
 
-    private void send_ACK_Message(String endpointId, String status) {
+    private void send_ACK_Message(String destUid, String status) {
         try{
             JSONObject response = new JSONObject();
             response.put("msg_type", "ACK");
             response.put("status"  , status);
-            response.put("dest"    , endpointId);
+            response.put("destUid" , destUid);
 
+            // get route to dest and remove that route
             Payload bytesPayload = Payload.fromBytes( response.toString().getBytes() );
-            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.relay_table.get(destUid), bytesPayload);
 
         }catch(Exception e){
             Log.e("FAIL", "ERROR WHEN SENDING ACK", e);
         }
     }
 
-    private void process_MARK_Message(JSONObject data) {
+    private void process_MARK_Message(JSONObject data, String fromEndpointId) {
         // auth code se dekhke authenticate karna hai
         try{
+            TeacherActivity.this.relay_table.put(data.getString("uid"), fromEndpointId);
+
             TeacherActivity.this.addStudent(data.getString("uid"), "normal");
 
-            send_ACK_Message(data.getString("source"), "MARKED:"+getAlphaNumericString(10));
+            send_ACK_Message(data.getString("uid"), "MARKED:"+getAlphaNumericString(10));
         }catch(Exception e){
             Log.e("FAIL", "ERROR WHEN PROCESSING MARK", e);
         }
@@ -249,7 +225,7 @@ public class TeacherActivity extends AppCompatActivity {
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i("INFO", "DISCOVER CONNECTION INITIATED");
 
-                    if(TeacherActivity.this.destEndpoint == null){
+                    if(TeacherActivity.this.destEndpoints.size() < TeacherActivity.this.maxConnections){
                         Nearby.getConnectionsClient(TeacherActivity.this).acceptConnection(endpointId, new TeacherActivity.DiscoverReceiveBytesPayloadListener());
                     }
                 }
@@ -259,13 +235,16 @@ public class TeacherActivity extends AppCompatActivity {
 
                     switch (result.getStatus().getStatusCode()) {
                         case ConnectionsStatusCodes.STATUS_OK:
-                            TeacherActivity.this.destEndpoint = endpointId;
+                            TeacherActivity.this.destEndpoints.add( endpointId );
+
                             Log.i("INFO", "DISCOVER CONNECTION RESULT OK");
                             Toast.makeText(TeacherActivity.this, "DISCOVER CONNECTION RESULT OK", Toast.LENGTH_SHORT).show();
 
-                            stopDiscovery();
+                            if(TeacherActivity.this.destEndpoints.size() == TeacherActivity.this.maxConnections) {
+                                stopDiscovery();
+                            }
 
-                            TeacherActivity.this.send_INIT_Message();
+                            TeacherActivity.this.send_INIT_Message(endpointId);
 
                             break;
                         case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
@@ -285,11 +264,11 @@ public class TeacherActivity extends AppCompatActivity {
                 public void onDisconnected(String endpointId) {
                     Log.e("FAIL", "DISCOVER DISCONNECTED FROM ENDPOINT " + endpointId);
 
-                    TeacherActivity.this.destEndpoint = null;
+                    TeacherActivity.this.destEndpoints = null;
                 }
             };
 
-    private void send_INIT_Message() {
+    private void send_INIT_Message(String endpointID) {
         try {
             JSONObject attendance_context = new JSONObject();
 
@@ -297,10 +276,10 @@ public class TeacherActivity extends AppCompatActivity {
             attendance_context.put("prof"     , TeacherActivity.this.prof);
             attendance_context.put("subject"  , TeacherActivity.this.subject);
             attendance_context.put("time_slot", TeacherActivity.this.time_slot);
-            attendance_context.put("whoami"   , TeacherActivity.this.destEndpoint);
+            attendance_context.put("whoami"   , endpointID);
 
             Payload bytesPayload = Payload.fromBytes( attendance_context.toString().getBytes() );
-            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
+            TeacherActivity.this.mConnectionsClient.sendPayload( endpointID , bytesPayload);
 
         } catch (Exception e) {
             Log.e("FAIL", "EXCEPTION WHILE SENDING INIT MESSAGE", e);
@@ -363,13 +342,25 @@ public class TeacherActivity extends AppCompatActivity {
             JSONObject obj = new JSONObject();
             obj.put("msg_type", "STOP");
 
-            Payload bytesPayload = Payload.fromBytes( obj.toString().getBytes() );
-            TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload).addOnSuccessListener(new OnSuccessListener<Void>() {
+            byte[] payload_bytes = obj.toString().getBytes();
+
+            Payload bytesPayload = Payload.fromBytes( payload_bytes );
+
+            ArrayList<Task<Void>> all_msgs = new ArrayList<>();
+
+            for(String endpointID : TeacherActivity.this.destEndpoints){
+                Task<Void> msg = TeacherActivity.this.mConnectionsClient.sendPayload(endpointID, bytesPayload);
+
+                all_msgs.add(msg);
+            }
+
+            Tasks.whenAll(all_msgs).addOnSuccessListener(new OnSuccessListener<Void>() {
                 @Override
                 public void onSuccess(Void aVoid) {
                     TeacherActivity.this.mConnectionsClient.stopAllEndpoints();
                 }
             });
+
         }catch(Exception e){
             Log.e("FAIL", "FAILED WHILE SENDING STOP MESSAGE", e);
         }
@@ -405,7 +396,7 @@ public class TeacherActivity extends AppCompatActivity {
             Date now = new Date();
             String fileName = formatter.format(now) + "_"+TeacherActivity.this.time_slot.split("-")[0].replaceAll(" ","")+ ".csv";
             File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
-            //File root = new File(Environment.getExternalStorageDirectory(), "Notes");
+
             if (!root.exists())
             {
                 root.mkdirs();
