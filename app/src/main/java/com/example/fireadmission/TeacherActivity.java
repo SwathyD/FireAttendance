@@ -1,11 +1,16 @@
 package com.example.fireadmission;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -53,7 +58,7 @@ public class TeacherActivity extends AppCompatActivity {
     private String subject = null;
     private String time_slot = null;
     private String prof = null;
-    
+
     ArrayList<String> student = new ArrayList<>();
     Executor listener = new Executor() {
         @Override
@@ -75,15 +80,14 @@ public class TeacherActivity extends AppCompatActivity {
     }
 
 
-
-    public void addStudent(String text, String status){
+    public void addStudent(String text, String status) {
         CustomView v1 = new CustomView(this, text, status);
         v1.setOnDeleteListener(listener);
         list.addView(v1);
         final Handler handlerUI = new Handler(Looper.getMainLooper());
         Runnable r = new Runnable() {
             public void run() {
-                ((ScrollView)findViewById(R.id.scrollView)).fullScroll(View.FOCUS_DOWN);
+                ((ScrollView) findViewById(R.id.scrollView)).fullScroll(View.FOCUS_DOWN);
             }
         };
         handlerUI.post(r);
@@ -124,7 +128,7 @@ public class TeacherActivity extends AppCompatActivity {
         student.add(text);
     }
 
-    public void manuallyAddStudent(View v){
+    public void manuallyAddStudent(View v) {
         AlertDialog.Builder alert = new AlertDialog.Builder(this);
         alert.setTitle("Add");
         alert.setMessage("Enter the UID of the student");
@@ -146,39 +150,39 @@ public class TeacherActivity extends AppCompatActivity {
         alert.show();
     }
 
-    public void showAttendance(View v){
+    public void showAttendance(View v) {
 
         EditText subject = findViewById(R.id.subject);
         EditText start = findViewById(R.id.start_time);
         EditText end = findViewById(R.id.end_time);
 
         boolean flag = true;
-        if(TextUtils.isEmpty(subject.getText()))   {
+        if (TextUtils.isEmpty(subject.getText())) {
             subject.setError("Enter Subject");
             flag = false;
         }
 
-        if(TextUtils.isEmpty(start.getText()))   {
+        if (TextUtils.isEmpty(start.getText())) {
             start.setError("Enter Lecture's Start Time");
             flag = false;
         }
 
-        if(TextUtils.isEmpty(end.getText()))   {
+        if (TextUtils.isEmpty(end.getText())) {
             end.setError("Enter Lecture's End Time");
             flag = false;
         }
 
-        if(flag){
+        if (flag) {
             setContentView(R.layout.activity_attendance);
 
-            TeacherActivity.this.subject   = subject.getText().toString();
+            TeacherActivity.this.subject = subject.getText().toString();
             TeacherActivity.this.time_slot = start.getText().toString() + " - " + end.getText().toString();
 
-            ((TextView)findViewById(R.id.textView6))
-            .setText( TeacherActivity.this.subject );
+            ((TextView) findViewById(R.id.textView6))
+                    .setText(TeacherActivity.this.subject);
 
-            ((TextView)findViewById(R.id.textView7))
-            .setText( TeacherActivity.this.time_slot );
+            ((TextView) findViewById(R.id.textView7))
+                    .setText(TeacherActivity.this.time_slot);
 
             TeacherActivity.this.list = findViewById(R.id.list);
 
@@ -191,21 +195,21 @@ public class TeacherActivity extends AppCompatActivity {
 
         @Override
         public void onPayloadReceived(String endpointId, Payload payload) {
-            try{
+            try {
                 byte[] receivedBytes = payload.asBytes();
                 String msg = new String(receivedBytes);
                 JSONObject data = new JSONObject(msg);
 
-                switch(data.getString("msg_type")){
+                switch (data.getString("msg_type")) {
                     case "MARK":
-                            TeacherActivity.this.process_MARK_Message(data);
+                        TeacherActivity.this.process_MARK_Message(data);
                         break;
 
                     default:
-                        Log.e("FAIL", "UNEXPECTED MESSAGE TYPE RECEIVED "+ data.getString("msg_type"));
+                        Log.e("FAIL", "UNEXPECTED MESSAGE TYPE RECEIVED " + data.getString("msg_type"));
                 }
 
-            }catch(Exception e){
+            } catch (Exception e) {
                 Log.e("FAIL", "ERROR WHILE RECEIVING MESSAGE ", e);
             }
         }
@@ -218,27 +222,27 @@ public class TeacherActivity extends AppCompatActivity {
     }
 
     private void send_ACK_Message(String endpointId, String status) {
-        try{
+        try {
             JSONObject response = new JSONObject();
             response.put("msg_type", "ACK");
-            response.put("status"  , status);
-            response.put("dest"    , endpointId);
+            response.put("status", status);
+            response.put("dest", endpointId);
 
-            Payload bytesPayload = Payload.fromBytes( response.toString().getBytes() );
+            Payload bytesPayload = Payload.fromBytes(response.toString().getBytes());
             TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
 
-        }catch(Exception e){
+        } catch (Exception e) {
             Log.e("FAIL", "ERROR WHEN SENDING ACK", e);
         }
     }
 
     private void process_MARK_Message(JSONObject data) {
         // auth code se dekhke authenticate karna hai
-        try{
+        try {
             TeacherActivity.this.addStudent(data.getString("uid"), "normal");
 
-            send_ACK_Message(data.getString("source"), "MARKED:"+getAlphaNumericString(10));
-        }catch(Exception e){
+            send_ACK_Message(data.getString("source"), "MARKED:" + getAlphaNumericString(10));
+        } catch (Exception e) {
             Log.e("FAIL", "ERROR WHEN PROCESSING MARK", e);
         }
     }
@@ -249,7 +253,7 @@ public class TeacherActivity extends AppCompatActivity {
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i("INFO", "DISCOVER CONNECTION INITIATED");
 
-                    if(TeacherActivity.this.destEndpoint == null){
+                    if (TeacherActivity.this.destEndpoint == null) {
                         Nearby.getConnectionsClient(TeacherActivity.this).acceptConnection(endpointId, new TeacherActivity.DiscoverReceiveBytesPayloadListener());
                     }
                 }
@@ -293,13 +297,13 @@ public class TeacherActivity extends AppCompatActivity {
         try {
             JSONObject attendance_context = new JSONObject();
 
-            attendance_context.put("msg_type" , "INIT");
-            attendance_context.put("prof"     , TeacherActivity.this.prof);
-            attendance_context.put("subject"  , TeacherActivity.this.subject);
+            attendance_context.put("msg_type", "INIT");
+            attendance_context.put("prof", TeacherActivity.this.prof);
+            attendance_context.put("subject", TeacherActivity.this.subject);
             attendance_context.put("time_slot", TeacherActivity.this.time_slot);
-            attendance_context.put("whoami"   , TeacherActivity.this.destEndpoint);
+            attendance_context.put("whoami", TeacherActivity.this.destEndpoint);
 
-            Payload bytesPayload = Payload.fromBytes( attendance_context.toString().getBytes() );
+            Payload bytesPayload = Payload.fromBytes(attendance_context.toString().getBytes());
             TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload);
 
         } catch (Exception e) {
@@ -352,35 +356,37 @@ public class TeacherActivity extends AppCompatActivity {
         Toast.makeText(TeacherActivity.this, "STOPPED DISCOVERY", Toast.LENGTH_SHORT).show();
     }
 
-    public void stopAttendance(View v){
+    public void stopAttendance(View v) {
         send_STOP_Message();
-        
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 101);
+        }
+
         createFile();
     }
 
-    private void send_STOP_Message(){
-        try{
+    private void send_STOP_Message() {
+        try {
             JSONObject obj = new JSONObject();
             obj.put("msg_type", "STOP");
 
-            Payload bytesPayload = Payload.fromBytes( obj.toString().getBytes() );
+            Payload bytesPayload = Payload.fromBytes(obj.toString().getBytes());
             TeacherActivity.this.mConnectionsClient.sendPayload(TeacherActivity.this.destEndpoint, bytesPayload).addOnSuccessListener(new OnSuccessListener<Void>() {
                 @Override
                 public void onSuccess(Void aVoid) {
                     TeacherActivity.this.mConnectionsClient.stopAllEndpoints();
                 }
             });
-        }catch(Exception e){
+        } catch (Exception e) {
             Log.e("FAIL", "FAILED WHILE SENDING STOP MESSAGE", e);
         }
     }
 
-    static String getAlphaNumericString(int n)
-    {
+    static String getAlphaNumericString(int n) {
         // chose a Character random from this String
         String AlphaNumericString = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                    + "0123456789"
-                                    + "abcdefghijklmnopqrstuvwxyz";
+                + "0123456789"
+                + "abcdefghijklmnopqrstuvwxyz";
 
         // create StringBuffer size of AlphaNumericString
         StringBuilder sb = new StringBuilder(n);
@@ -389,38 +395,40 @@ public class TeacherActivity extends AppCompatActivity {
 
             // generate a random number between
             // 0 to AlphaNumericString variable length
-            int index  = (int)(AlphaNumericString.length() * Math.random());
+            int index = (int) (AlphaNumericString.length() * Math.random());
 
             // add Character one by one in end of sb
-            sb.append( AlphaNumericString.charAt(index) );
+            sb.append(AlphaNumericString.charAt(index));
         }
 
         return sb.toString();
     }
 
-    public void createFile(){
-        try
-        {
+    public void createFile() {
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "File write permission not granted", Toast.LENGTH_LONG).show();
+                return;
+            }
             SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
             Date now = new Date();
-            String fileName = formatter.format(now) + "_"+TeacherActivity.this.time_slot.split("-")[0].replaceAll(" ","")+ ".csv";
+            String fileName = formatter.format(now) + "_" + TeacherActivity.this.time_slot.split("-")[0].replaceAll(" ", "") + ".csv";
             File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
             //File root = new File(Environment.getExternalStorageDirectory(), "Notes");
-            if (!root.exists())
-            {
+            if (!root.exists()) {
                 root.mkdirs();
             }
             File file = new File(root, fileName);
 
-            FileWriter writer = new FileWriter(file,true);
-            writer.append("Subject: "+subject+"\nTime: "+TeacherActivity.this.time_slot+"\nStudent List: \n");
-            for(int i=0; i<student.size(); i++){
-                writer.append(student.get(i)+"\n");
+            FileWriter writer = new FileWriter(file, true);
+            writer.append("Subject: " + subject + "\nTime: " + TeacherActivity.this.time_slot + "\nStudent List: \n");
+            for (int i = 0; i < student.size(); i++) {
+                writer.append(student.get(i) + "\n");
             }
             writer.append("\n\n\n");
             writer.flush();
             writer.close();
-            Toast.makeText(this, "Data has been written to Attendance/"+fileName, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Data has been written to Attendance/" + fileName, Toast.LENGTH_SHORT).show();
             AlertDialog.Builder alert = new AlertDialog.Builder(this);
             alert.setTitle("Email");
             alert.setMessage("Do you want to proceed with sending the file through email?");
@@ -440,31 +448,42 @@ public class TeacherActivity extends AppCompatActivity {
 
             alert.show();
 
-        }
-        catch(IOException e)
-        {
+        } catch (IOException e) {
             e.printStackTrace();
 
         }
 
     }
 
-    public void sendEmail(String fileName){
+    public void sendEmail(String fileName) {
         Intent emailIntent = new Intent(Intent.ACTION_SEND);
         emailIntent.setType("text/plain");
-        emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[] {TeacherActivity.this.prof});
-        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Attendance report for "+subject);
+        emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[]{TeacherActivity.this.prof});
+        emailIntent.putExtra(Intent.EXTRA_SUBJECT, "Attendance report for " + subject);
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy_MM_dd");
-        emailIntent.putExtra(Intent.EXTRA_TEXT, "Attendance Report: \nDate: "+formatter.format(new Date())+"\nTime: "+TeacherActivity.this.time_slot);
+        emailIntent.putExtra(Intent.EXTRA_TEXT, "Attendance Report: \nDate: " + formatter.format(new Date()) + "\nTime: " + TeacherActivity.this.time_slot);
         File root = Environment.getExternalStorageDirectory();
-        String pathToMyAttachedFile = "Attendance/"+fileName;
+        String pathToMyAttachedFile = "Attendance/" + fileName;
         File file = new File(root, pathToMyAttachedFile);
         if (!file.exists() || !file.canRead()) {
-            Toast.makeText(this, "Could not attach the file "+fileName, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Could not attach the file " + fileName, Toast.LENGTH_SHORT).show();
             return;
         }
         Uri uri = Uri.fromFile(file);
         emailIntent.putExtra(Intent.EXTRA_STREAM, uri);
         startActivity(Intent.createChooser(emailIntent, "Share Attendance Records via"));
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 101) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                createFile();
+            } else {
+                Toast.makeText(TeacherActivity.this, "File Permission Denied", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
