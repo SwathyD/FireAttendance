@@ -139,10 +139,10 @@ public class StudentActivity extends AppCompatActivity {
 
 
         promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Biometric login for our app")
-                .setSubtitle("Log in using your biometric credential")
-                .setDeviceCredentialAllowed(true)
-                .build();
+                        .setTitle("Biometric login for our app")
+                        .setSubtitle("Log in using your biometric credential")
+                        .setDeviceCredentialAllowed(true)
+                        .build();
 
         // Prompt appears when user clicks "Log in".
         // Consider integrating with the keystore to unlock cryptographic operations,
@@ -334,9 +334,9 @@ public class StudentActivity extends AppCompatActivity {
                         Log.e("FAIL", "UNEXPECTED MESSAGE WHILE RECEIVING DATA FROM MESH" + data.getString("msg_type"));
                 }
 
-                Log.i("MSG RECEIVED FROM MESH", msg);
+                Log.i("INFO", "Message From Mesh : " + msg);
             } catch (Exception e) {
-                Log.e("ERROR", "MAJOR ERROR", e);
+                Log.e("FAIL", "MAJOR ERROR", e);
             }
         }
 
@@ -348,7 +348,7 @@ public class StudentActivity extends AppCompatActivity {
     }
 
     private void relay_ACK_Message(String destUid, byte[] data) {
-         String next_hop = StudentActivity.this.relay_table.get(destUid);
+        String next_hop = StudentActivity.this.relay_table.get(destUid);
 
         Payload bytesPayload = Payload.fromBytes( data );
         StudentActivity.this.mConnectionsClient.sendPayload(next_hop, bytesPayload);
@@ -380,12 +380,9 @@ public class StudentActivity extends AppCompatActivity {
             all_msgs.add(msg);
         }
 
-        Tasks.whenAll(all_msgs).addOnSuccessListener(new OnSuccessListener<Void>() {
-            @Override
-            public void onSuccess(Void aVoid) {
-                StudentActivity.this.mConnectionsClient.stopAllEndpoints();
-                StudentActivity.this.afterMarked();
-            }
+        Tasks.whenAll(all_msgs).addOnSuccessListener(aVoid -> {
+            StudentActivity.this.mConnectionsClient.stopAllEndpoints();
+            StudentActivity.this.afterMarked();
         });
 
     }

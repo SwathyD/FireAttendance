@@ -57,15 +57,10 @@ public class TeacherActivity extends AppCompatActivity {
     private String subject = null;
     private String time_slot = null;
     private String prof = null;
-    private HashMap<String, String> relay_table;
+    private HashMap<String, String> relay_table = new HashMap<>();
 
     ArrayList<String> student = new ArrayList<>();
-    Executor listener = new Executor() {
-        @Override
-        public void execute(View v) {
-            TeacherActivity.this.list.removeView(v);
-        }
-    };
+    Executor listener = v -> TeacherActivity.this.list.removeView(v);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,12 +99,9 @@ public class TeacherActivity extends AppCompatActivity {
 
         final EditText input = new EditText(this);
         alert.setView(input);
-        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String value = input.getText().toString();
-                addStudent(value, "new");
-            }
+        alert.setPositiveButton("Ok", (dialog, which) -> {
+            String value = input.getText().toString();
+            addStudent(value, "new");
         });
 
         alert.setNegativeButton("Cancel", (dialog, which) -> {

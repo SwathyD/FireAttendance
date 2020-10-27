@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -41,6 +42,7 @@ public class LoginActivity extends AppCompatActivity {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION,
                     Manifest.permission.READ_PHONE_STATE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
             };
     protected String[] getRequiredPermissions() {
         return REQUIRED_PERMISSIONS;
@@ -59,19 +61,19 @@ public class LoginActivity extends AppCompatActivity {
         ActionBar actionBar = getSupportActionBar();
         actionBar.hide();
         radioGroup = (RadioGroup) findViewById(R.id.radioGrp);
-        radioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener(){
-            public void onCheckedChanged(RadioGroup group, int checkedId){
-                EditText text = findViewById(R.id.inputText);
-                if(checkedId == R.id.radioButton2){
-                    text.setHint("UID");
-                }
-                else{
-                    text.setHint("Email address");
-                }
-
-                text.setError(null);
-                text.setText("");
+        radioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            EditText text = findViewById(R.id.inputText);
+            if(checkedId == R.id.radioButton2){
+                text.setHint("UID");
+                text.setInputType(InputType.TYPE_NUMBER_FLAG_SIGNED | InputType.TYPE_CLASS_NUMBER);
             }
+            else{
+                text.setHint("Email address");
+                text.setInputType(InputType.TYPE_CLASS_TEXT);
+            }
+
+            text.setError(null);
+            text.setText("");
         });
     }
 
