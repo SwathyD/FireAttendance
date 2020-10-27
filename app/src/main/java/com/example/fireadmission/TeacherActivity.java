@@ -59,11 +59,12 @@ public class TeacherActivity extends AppCompatActivity {
     private String time_slot = null;
     private String prof = null;
 
-    ArrayList<String> student = new ArrayList<>();
+    ArrayList<StudentRecord> student = new ArrayList<>();
     Executor listener = new Executor() {
         @Override
         public void execute(View v) {
             TeacherActivity.this.list.removeView(v);
+            //remove the student record from students arraylist
         }
     };
 
@@ -91,41 +92,7 @@ public class TeacherActivity extends AppCompatActivity {
             }
         };
         handlerUI.post(r);
-//        TextView view = new TextView(this);
-//        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-//        params.setMargins(60,0,0,10);
-//        view.setLayoutParams(params);
-//        view.setText(text);
-//        if(status.equals("new"))
-//            view.setTextColor(getResources().getColor(R.color.user_background));
-//        else if(status.equals("error"))
-//            view.setTextColor(Color.parseColor("#F30404"));
-//        else if(status.equals("warning"))
-//            view.setTextColor(Color.parseColor("#FF9800"));
-//        view.setTextSize(18);
-//        view.setOnClickListener(v -> {
-//            AlertDialog.Builder alert = new AlertDialog.Builder(this);
-//            alert.setTitle("Alert!");
-//            alert.setMessage("Unmark "+text+" ?");
-//            alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
-//                @Override
-//                public void onClick(DialogInterface dialog, int which) {
-//                   list.removeView(view);
-//                   student.remove(text);
-//                }
-//            });
-//
-//            alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
-//                @Override
-//                public void onClick(DialogInterface dialog, int which) {
-//                    //Cancel
-//                }
-//            });
-//
-//            alert.show();
-//        });
-//        list.addView(view);
-        student.add(text);
+        student.add(new StudentRecord(text, ""));
     }
 
     public void manuallyAddStudent(View v) {
@@ -485,5 +452,14 @@ public class TeacherActivity extends AppCompatActivity {
                 Toast.makeText(TeacherActivity.this, "File Permission Denied", Toast.LENGTH_SHORT).show();
             }
         }
+    }
+}
+
+class StudentRecord{
+    String uid;
+    String response;
+    StudentRecord(String uid, String response){
+        this.uid = uid;
+        this.response = response;
     }
 }
