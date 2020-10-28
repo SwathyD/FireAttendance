@@ -62,9 +62,13 @@ public class TeacherActivity extends AppCompatActivity {
     ArrayList<StudentRecord> student = new ArrayList<>();
     Executor listener = new Executor() {
         @Override
-        public void execute(View v) {
+        public void execute(View v, String uid) {
             TeacherActivity.this.list.removeView(v);
-            //remove the student record from students arraylist
+
+            for(int i=0; i<student.size(); i++){
+                if(student.get(i).uid.equals(uid))
+                    student.remove(i);
+            }
         }
     };
 
@@ -390,7 +394,7 @@ public class TeacherActivity extends AppCompatActivity {
             FileWriter writer = new FileWriter(file, true);
             writer.append("Subject: " + subject + "\nTime: " + TeacherActivity.this.time_slot + "\nStudent List: \n");
             for (int i = 0; i < student.size(); i++) {
-                writer.append(student.get(i) + "\n");
+                writer.append(student.get(i).uid + "\n");
             }
             writer.append("\n\n\n");
             writer.flush();
