@@ -84,10 +84,10 @@ public class MainActivity extends Activity {
 
             if (!root.exists())
             {
-                root.mkdirs();
+                root.mkdir();
             }
 
-            store();
+//            store();
             load();
         } catch (Exception e) {
             e.printStackTrace();
@@ -143,7 +143,7 @@ public class MainActivity extends Activity {
                                         EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
                                     ).build();
 
-        byte[] fileContent = "hello, world!".getBytes(StandardCharsets.UTF_8);
+        byte[] fileContent = "hello, world 2".getBytes(StandardCharsets.UTF_8);
         OutputStream outputStream = encryptedFile.openFileOutput();
         outputStream.write(fileContent);
         outputStream.flush();

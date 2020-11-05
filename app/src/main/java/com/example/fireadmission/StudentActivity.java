@@ -5,6 +5,8 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.biometric.BiometricPrompt;
+import androidx.security.crypto.EncryptedFile;
+import androidx.security.crypto.MasterKeys;
 import pl.droidsonroids.gif.GifDrawable;
 import pl.droidsonroids.gif.GifImageView;
 
@@ -12,6 +14,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Environment;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -38,9 +43,20 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.concurrent.Executor;
@@ -49,33 +65,43 @@ public class StudentActivity extends AppCompatActivity {
 
     private int maxConnections = 2;
 
-    private String UID;
+    private String   UID;
     private Executor executor;
-    private BiometricPrompt biometricPrompt;
-    private BiometricPrompt.PromptInfo promptInfo;
-    private String self_endpointId;
 
+    private BiometricPrompt            biometricPrompt;
+    private BiometricPrompt.PromptInfo promptInfo;
+
+    private String self_endpointId;
     private String subject;
     private String time_slot;
     private String prof;
+    private int    lec_no;
 
-    private String attendance_status;
+    private String     attendance_status;
+    private JSONObject attendance_context = new JSONObject();
 
     // key is the destination and value is the next hop
     private HashMap<String, String> relay_table = new HashMap<>();
 
-    TextView mStatusText;
+    TextView    mStatusText;
     ProgressBar mSpinner;
-    Button mBiometricLoginButton;
-    GifDrawable drawable_check;
-    GifImageView check_image;
+    Button      mBiometricLoginButton;
+
+    GifDrawable  drawable_check, drawable_exclm;
+    GifImageView check_image   , exclm_image;
 
     private ConnectionsClient mConnectionsClient;
-    private String sourceEndpoint = null;
-    private ArrayList<String> destEndpoints = new ArrayList<>();
+    private String            sourceEndpoint = null;
+    private ArrayList<String> destEndpoints  = new ArrayList<>();
+    private boolean           isMarked       = false;
+    private boolean           stopReceived   = false;
 
-    JSONObject attendanceData = null;
+    private String isSecure    = null;
+    private int    present_for = 0;
+    private String authCode    = null;
+
     LinearLayout studentAttendanceList;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -90,6 +116,12 @@ public class StudentActivity extends AppCompatActivity {
         drawable_check.seekToFrame(0);
         drawable_check.setLoopCount(1);
 
+        exclm_image    = (GifImageView) findViewById(R.id.exclm_mark);
+        drawable_exclm = (GifDrawable) exclm_image.getDrawable();
+        drawable_exclm.pause();
+        drawable_exclm.seekToFrame(0);
+        drawable_exclm.setLoopCount(1);
+
         UID = getIntent().getStringExtra("key");
         TextView uid = findViewById(R.id.studentUID);
         uid.setText(UID);
@@ -103,6 +135,7 @@ public class StudentActivity extends AppCompatActivity {
         mBiometricLoginButton = findViewById(R.id.button2);
 
         mConnectionsClient = Nearby.getConnectionsClient(this);
+        isMarked = false;
 
         executor = ContextCompat.getMainExecutor(this);
         biometricPrompt = new BiometricPrompt(StudentActivity.this,
@@ -110,21 +143,19 @@ public class StudentActivity extends AppCompatActivity {
             @Override
             public void onAuthenticationError(int errorCode,  @NonNull CharSequence errString) {
                 super.onAuthenticationError(errorCode, errString);
-                Toast.makeText(getApplicationContext(), "Authentication error: " + errString, Toast.LENGTH_SHORT).show();
+
+                StudentActivity.this.isSecure = "no";
+
+                StudentActivity.this.startAttendanceMarkingProcess();
             }
 
             @Override
             public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                 super.onAuthenticationSucceeded(result);
-                Toast.makeText(getApplicationContext(), "Authentication succeeded!", Toast.LENGTH_SHORT).show();
 
-                StudentActivity.this.mBiometricLoginButton.setEnabled(false);
-                StudentActivity.this.mBiometricLoginButton.setVisibility(View.INVISIBLE);
+                StudentActivity.this.isSecure = "yes";
 
-                StudentActivity.this.mStatusText.setVisibility(View.VISIBLE);
-                StudentActivity.this.mSpinner.setVisibility(View.VISIBLE);
-
-                startAdvertising();
+                StudentActivity.this.startAttendanceMarkingProcess();
             }
 
             @Override
@@ -137,10 +168,8 @@ public class StudentActivity extends AppCompatActivity {
         });
 
 
-
         promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                        .setTitle("Biometric login for our app")
-                        .setSubtitle("Log in using your biometric credential")
+                        .setTitle("Please Authenticate Yourself.")
                         .setDeviceCredentialAllowed(true)
                         .build();
 
@@ -148,6 +177,16 @@ public class StudentActivity extends AppCompatActivity {
         // Consider integrating with the keystore to unlock cryptographic operations,
         // if needed by your app.
         mBiometricLoginButton.setOnClickListener(v -> biometricPrompt.authenticate(promptInfo));
+    }
+
+    private void startAttendanceMarkingProcess(){
+        StudentActivity.this.mBiometricLoginButton.setEnabled(false);
+        StudentActivity.this.mBiometricLoginButton.setVisibility(View.INVISIBLE);
+
+        StudentActivity.this.mStatusText.setVisibility(View.VISIBLE);
+        StudentActivity.this.mSpinner.setVisibility(View.VISIBLE);
+
+        startAdvertising();
     }
 
     // this is called whenever the leaf node wants to send data to teacher... relay is done here
@@ -236,20 +275,27 @@ public class StudentActivity extends AppCompatActivity {
                     Log.e("FAIL", "DISCOVER DISCONNECTED FROM ENDPOINT " + endpointId);
 
                     StudentActivity.this.destEndpoints.remove(endpointId);
+
+                    relay_table.values().removeAll(Collections.singleton(endpointId));
+
+                    if(!StudentActivity.this.stopReceived){
+                        startDiscovery();
+                    }
                 }
             };
 
     private void send_INIT_Message(String endpointId) {
         try {
-            JSONObject attendance_context = new JSONObject();
+            JSONObject init_data = new JSONObject();
 
-            attendance_context.put("msg_type" , "INIT");
-            attendance_context.put("prof"     , StudentActivity.this.prof);
-            attendance_context.put("subject"  , StudentActivity.this.subject);
-            attendance_context.put("time_slot", StudentActivity.this.time_slot);
-            attendance_context.put("whoami"   , endpointId);
+            init_data.put("msg_type" , "INIT");
+            init_data.put("prof"     , StudentActivity.this.prof);
+            init_data.put("subject"  , StudentActivity.this.subject);
+            init_data.put("time_slot", StudentActivity.this.time_slot);
+            init_data.put("whoami"   , endpointId);
+            init_data.put("lec_no"   , StudentActivity.this.lec_no);
 
-            Payload bytesPayload = Payload.fromBytes( attendance_context.toString().getBytes() );
+            Payload bytesPayload = Payload.fromBytes( init_data.toString().getBytes() );
             StudentActivity.this.mConnectionsClient.sendPayload(endpointId, bytesPayload);
 
         } catch (Exception e) {
@@ -355,11 +401,15 @@ public class StudentActivity extends AppCompatActivity {
     }
 
     private void process_ACK_Message(JSONObject data) {
-        // data store karna hai jo user ko dikhega when STOP trigger hoga
         try{
             StudentActivity.this.attendance_status = data.getString("status");
+            StudentActivity.this.present_for = data.getInt("present_for");
 
-            updateStudentAttendance(StudentActivity.this.subject,StudentActivity.this.prof,2);
+            StudentActivity.this.isMarked = true;
+
+            if(data.has("authCode")){
+                StudentActivity.this.authCode = data.getString("authCode");
+            }
 
         }catch(Exception ex){
             StudentActivity.this.attendance_status = "ERROR";
@@ -369,6 +419,8 @@ public class StudentActivity extends AppCompatActivity {
     }
 
     private void process_STOP_Message(JSONObject data){
+        StudentActivity.this.stopReceived = true;
+
         ArrayList<Task<Void>> all_msgs = new ArrayList<>();
         byte[] bytes_payload = data.toString().getBytes();
 
@@ -384,7 +436,6 @@ public class StudentActivity extends AppCompatActivity {
             StudentActivity.this.mConnectionsClient.stopAllEndpoints();
             StudentActivity.this.afterMarked();
         });
-
     }
 
     private void process_INIT_Message(JSONObject data){
@@ -393,20 +444,29 @@ public class StudentActivity extends AppCompatActivity {
             StudentActivity.this.prof            = data.getString("prof");
             StudentActivity.this.subject         = data.getString("subject");
             StudentActivity.this.time_slot       = data.getString("time_slot");
+            StudentActivity.this.lec_no          = data.getInt("lec_no");
 
-            updateStatus(StudentActivity.this.subject + " ("+StudentActivity.this.prof+")\n\n"+StudentActivity.this.time_slot);
+            if(this.attendance_context.has(this.subject+":"+this.prof)){
+                StudentActivity.this.authCode = this.attendance_context.getJSONObject(this.subject+":"+this.prof).getString("authCode");
+            }
+
+            updateStatus(StudentActivity.this.subject + " ("+StudentActivity.this.prof+")\n"+StudentActivity.this.time_slot+"\n"+"Lecture "+StudentActivity.this.lec_no);
         }catch(Exception e){
             Log.e("FAIL", "ERROR WHILE PARSING INIT MESSAGE", e);
         }
     }
 
     private void send_MARK_Message() {
+        if(StudentActivity.this.isMarked) return;
+
         try {
             JSONObject mark = new JSONObject();
 
             mark.put("msg_type" , "MARK");
             mark.put("uid"      , StudentActivity.this.UID);
             mark.put("source"   , StudentActivity.this.self_endpointId);
+            mark.put("isSecure" , StudentActivity.this.isSecure);
+            mark.put("authCode" , StudentActivity.this.authCode == null ? "" : StudentActivity.this.authCode);
 
             Payload bytesPayload = Payload.fromBytes( mark.toString().getBytes() );
             StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
@@ -419,13 +479,36 @@ public class StudentActivity extends AppCompatActivity {
     private void afterMarked(){
         StudentActivity.this.updateStatus(StudentActivity.this.attendance_status);
         StudentActivity.this.mSpinner.setVisibility(View.INVISIBLE);
-        StudentActivity.this.check_image.setVisibility(View.VISIBLE);
 
-        GifDrawable drawable_check = (GifDrawable) ((GifImageView)findViewById(R.id.check_mark)).getDrawable();
-        drawable_check.start();
+        if(StudentActivity.this.attendance_status.equals("MARKED")){
+            StudentActivity.this.check_image.setVisibility(View.VISIBLE);
+            drawable_check.start();
+        }else{
+            StudentActivity.this.exclm_image.setVisibility(View.VISIBLE);
+            drawable_exclm.start();
+        }
 
         stopAdvertising();
         stopDiscovery();
+
+        try {
+            SimpleDateFormat formatter = new SimpleDateFormat("EEE, MMM d");
+
+            StudentActivity.this.attendance_context.put("last_updated", formatter.format(new Date()));
+
+            JSONObject attendance_data = new JSONObject();
+            attendance_data.put("present_for", StudentActivity.this.present_for);
+            attendance_data.put("total_lec", StudentActivity.this.lec_no);
+            attendance_data.put("authCode", StudentActivity.this.authCode);
+
+            StudentActivity.this.attendance_context.put(StudentActivity.this.subject+":"+StudentActivity.this.prof, attendance_data);
+        } catch (JSONException e) {
+            Log.e("FAIL", "MAJOR ERROR WHILE POPULATING JSON AFTER MARKED", e);
+        }
+
+        renderAttendance();
+
+        store();
     }
 
     private ConnectionLifecycleCallback advertConnectionLifecycleCallback =
@@ -471,6 +554,12 @@ public class StudentActivity extends AppCompatActivity {
                     Log.e("FAIL", "ADVERT DISCONNECTED FROM ENDPOINT " + endpointId);
 
                     StudentActivity.this.sourceEndpoint = null;
+
+                    if(!StudentActivity.this.stopReceived){
+                        updateStatus("Waiting for Connection");
+                        stopDiscovery();
+                        startAdvertising();
+                    }
                 }
             };
 
@@ -504,78 +593,57 @@ public class StudentActivity extends AppCompatActivity {
         Toast.makeText(StudentActivity.this, "STOPPED ADVERTISING", Toast.LENGTH_SHORT).show();
     }
 
-    /*Get Hashmap which has Student Attendance Data*/
-    private JSONObject getStudentAttendance(){
-        return attendanceData;
-    }
 
-    /*Update Hashmap which has Student Attendance Data and update the shared Prefrence/File Data*/
-    private void updateStudentAttendance(String subject,String teacherCode, int total_lec){
-
-        //Update Hash
-        try {
-            String key = subject + '-' + teacherCode;
-            if (this.attendanceData.has(key)) {
-                JSONObject temp = this.attendanceData.getJSONObject(key);
-                temp.put("total_lec",total_lec);
-                temp.put("present_lec",temp.getInt("present_lec")+1);
-                this.attendanceData.put(key, temp);
-            } else {
-                JSONObject temp = new JSONObject();
-                temp.put("total_lec",total_lec);
-                temp.put("present_lec",1);
-                this.attendanceData.put(key, temp );
-            }
-            //Update Shared Prefrences
-            Iterator<String> keys = this.attendanceData.keys();
-            this.studentAttendanceList.removeAllViews();
-            while(keys.hasNext()) {
-                String temp = keys.next();
-                if (this.attendanceData.get(temp) instanceof JSONObject) {
-                    total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
-                    int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
-                    addAttendance(temp, present_lec, total_lec );
-                }
-            }
-            SharedPreferences sharedPreferences = getPreferences(Context.MODE_PRIVATE);
-
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-
-
-            String attendanceDataString = attendanceData.toString();
-            editor.putString("attendanceData", attendanceDataString);
-
-            boolean commit = editor.commit();
-        }catch (Exception e){
-
-        }
-    }
     private void setStudentAttendance(){
         try {
+            String data = load();
 
-            SharedPreferences sharedPreferences = getPreferences(Context.MODE_PRIVATE);
-            String key = "attendanceData";
-            if(sharedPreferences.contains(key)) {
-                String attendanceString = sharedPreferences.getString(key, null);
-                this.attendanceData = new JSONObject(attendanceString);
+            StudentActivity.this.attendance_context = new JSONObject(data);
 
-                Iterator<String> keys = this.attendanceData.keys();
-
-                while(keys.hasNext()) {
-                    String temp = keys.next();
-                    if (this.attendanceData.get(temp) instanceof JSONObject) {
-                        int total_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("total_lec");
-                        int present_lec = ((JSONObject) this.attendanceData.get(temp)).getInt("present_lec");
-                        addAttendance(temp, present_lec, total_lec );
-                    }
-                }
-
+            if(!StudentActivity.this.attendance_context.has("last_updated")){
+                StudentActivity.this.attendance_context.put("last_updated", "");
             }
-            else{
-                this.attendanceData = new JSONObject();
-            }
+
         }catch (Exception e){
+            Log.e("FAIL", "ERROR WHILE PARSING JSON OBJECT", e);
 
+            try {
+                StudentActivity.this.attendance_context = new JSONObject();
+                StudentActivity.this.attendance_context.put("last_updated", "");
+            } catch (JSONException ex) {
+                Log.e("FAIL", "ERROR WHILE CREATING BLANK JSON OBJECT", ex);
+            }
+        }
+
+        renderAttendance();
+    }
+
+    private void renderAttendance(){
+        try{
+
+            ((TextView)findViewById(R.id.last_updated))
+            .setText(StudentActivity.this.attendance_context.getString("last_updated"));
+
+            StudentActivity.this.studentAttendanceList.removeAllViews();
+
+            for (Iterator<String> it = StudentActivity.this.attendance_context.keys(); it.hasNext(); ) {
+                String key = it.next();
+
+                if(key.equals("last_updated")) continue;
+
+                String subject = key.substring(0, key.indexOf(':'));
+                String prof    = key.substring(key.indexOf(':')+1);
+
+                JSONObject attendance_data = this.attendance_context.getJSONObject(key);
+
+                addAttendance(subject + " ("+ prof +")",
+                        attendance_data.getInt("present_for"),
+                        attendance_data.getInt("total_lec")
+                );
+            }
+
+        }catch(Exception e){
+            Log.e("FAIL", "ERROR WHILE RENDERING ATTENDANCE", e);
         }
     }
 
@@ -592,6 +660,93 @@ public class StudentActivity extends AppCompatActivity {
 
         view.setTextSize(18);
         this.studentAttendanceList.addView(view);
+    }
+
+    public String load()
+    {
+        String data = "";
+        try{
+            Context context = getApplicationContext();
+
+            KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                    "keystore-alias",
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .build();
+
+            String mainKey = MasterKeys.getOrCreate(spec);
+
+            String fileToRead = "app_data.bin";
+            EncryptedFile encryptedFile = new EncryptedFile.Builder(new File(Environment.getExternalStorageDirectory() + "/Attendance", fileToRead),
+                    context,
+                    mainKey,
+                    EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
+            ).build();
+
+            InputStream inputStream = encryptedFile.openFileInput();
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            int nextByte = inputStream.read();
+            while (nextByte != -1) {
+                byteArrayOutputStream.write(nextByte);
+                nextByte = inputStream.read();
+            }
+
+            byte[] plaintext = byteArrayOutputStream.toByteArray();
+
+            data = new String(plaintext);
+        }catch(Exception ex){
+            Log.e("FAIL", "ERROR WHILE FILE INPUT", ex);
+        }
+
+        return data;
+    }
+
+    public void store() {
+        try{
+            Context context = getApplicationContext();
+
+            KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                    "keystore-alias",
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .build();
+
+            String mainKey = MasterKeys.getOrCreate(spec);
+
+            String fileToWrite = "app_data.bin";
+
+            File root = new File(Environment.getExternalStorageDirectory(), "Attendance");
+
+            if (!root.exists())
+            {
+                root.mkdirs();
+            }
+
+            File f = new File(Environment.getExternalStorageDirectory() + "/Attendance", fileToWrite);
+
+            if(f.exists()){
+                f.delete();
+            }
+
+            EncryptedFile encryptedFile = new EncryptedFile.Builder(
+                    f,
+                    context,
+                    mainKey,
+                    EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
+            ).build();
+
+            byte[] fileContent = StudentActivity.this.attendance_context.toString().getBytes(StandardCharsets.UTF_8);
+            OutputStream outputStream = encryptedFile.openFileOutput();
+            outputStream.write(fileContent);
+            outputStream.flush();
+            outputStream.close();
+        }catch(Exception ex){
+            Log.e("FAIL", "MAJOR ERROR WHILE STORING APP_DATA", ex);
+        }
     }
 }
 
