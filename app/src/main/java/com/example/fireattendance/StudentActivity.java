@@ -1,6 +1,7 @@
 package com.example.fireattendance;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -399,6 +400,7 @@ public class StudentActivity extends AppCompatActivity {
 
     private class AdvertReceiveBytesPayloadListener extends PayloadCallback {
 
+        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         @Override
         public void onPayloadReceived(String endpointId, Payload payload) {
             try {
@@ -574,13 +576,39 @@ public class StudentActivity extends AppCompatActivity {
         StudentActivity.this.mStatusText.setText(s);
     }
 
+    public double getBatteryCapacity(Context context) {
+        Object mPowerProfile;
+        double batteryCapacity = 0;
+        final String POWER_PROFILE_CLASS = "com.android.internal.os.PowerProfile";
+
+        try {
+            mPowerProfile = Class.forName(POWER_PROFILE_CLASS)
+                    .getConstructor(Context.class)
+                    .newInstance(context);
+
+            batteryCapacity = (double) Class
+                    .forName(POWER_PROFILE_CLASS)
+                    .getMethod("getBatteryCapacity")
+                    .invoke(mPowerProfile);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return batteryCapacity;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void send_MARK_Message() {
         try {
             JSONObject mark = new JSONObject();
             IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
             Intent batteryStatus = StudentActivity.this.registerReceiver(null, ifilter);
-            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+//            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
             int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+
+            BatteryManager bm = (BatteryManager) this.getSystemService(BATTERY_SERVICE);
+            int level   = (int) getBatteryCapacity(this);
 
             float batteryPct = level * 100 / (float)scale;
             mark.put("msg_type" , "MARK");
@@ -589,11 +617,11 @@ public class StudentActivity extends AppCompatActivity {
             mark.put("bt_name"  , StudentActivity.this.btName);
             //Put Required Details here
             //Battery and percent , Manufacturer name of sender
-            mark.put("battery_mah",level );
+            mark.put("battery_mah", level * batteryPct / 100 );
             mark.put("battery_percent", batteryPct );
             mark.put("manufacturer_name", Build.MANUFACTURER);
 
-            Log.i("INFO BATTERY", level + "" );
+            Log.i("INFO BATTERY", level + " - " + batteryPct);
             Payload bytesPayload = Payload.fromBytes( mark.toString().getBytes() );
             StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
 

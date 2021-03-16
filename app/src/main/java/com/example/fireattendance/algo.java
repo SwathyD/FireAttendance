@@ -2,96 +2,94 @@ package com.example.fireattendance;
 
 import android.util.Log;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
-import java.util.Set;
 
 public class algo{
 
     static boolean isInside(int RSSI,int target_battery_mah,int target_battery_percent,int detector_battery_mah,int detector_battery_percent,int target_manufacturer,int detector_manufacturer){
-        //return (rssi>-50)?true:false;
+        return (RSSI>-50)?true:false;
 
         //Put Model here
-        if(RSSI <= -72.50){
-            if(target_battery_percent <= 24.00){
-                return true;
-            }
-            else{
-                if(detector_manufacturer <= 1.50){
-                    if(RSSI <= -79.00){
-                        return false;
-                    }
-                    else{
-                        return true;
-                    }
-                }
-                else{
-                    return false;
-                }
-            }
-        }
-        else{
-            if(RSSI <= -66.00){
-                if(detector_battery_percent <= 77.00){
-                    return false;
-                }
-                else{
-                    if(RSSI <= -68.50){
-                        if(detector_battery_percent <= 86.50){
-                            return true;
-                        }
-                        else{
-                            if(RSSI <= -70.50){
-                                return false;
-                            }
-                            else{
-                                return true;
-                            }
-                        }
-                    }
-                    else{
-                        if(detector_battery_percent <= 86.50){
-                            if(detector_battery_mah <= 3025.50){
-                                return true;
-                            }
-                            else{
-                                return false;
-                            }
-                        }
-                        else{
-                            return true;
-                        }
-                    }
-                }
-            }
-            else{
-                if(detector_battery_percent <= 76.50){
-                    if(detector_battery_percent <= 36.50){
-                        return true;
-                    }
-                    else{
-                        if(RSSI <= -47.50){
-                            return false;
-                        }
-                        else{
-                            return true;
-                        }
-                    }
-                }
-                else{
-                    return true;
-                }
-            }
-        }
+//        if(RSSI <= -72.50){
+//            if(target_battery_percent <= 24.00){
+//                return true;
+//            }
+//            else{
+//                if(detector_manufacturer <= 1.50){
+//                    if(RSSI <= -79.00){
+//                        return false;
+//                    }
+//                    else{
+//                        return true;
+//                    }
+//                }
+//                else{
+//                    return false;
+//                }
+//            }
+//        }
+//        else{
+//            if(RSSI <= -66.00){
+//                if(detector_battery_percent <= 77.00){
+//                    return false;
+//                }
+//                else{
+//                    if(RSSI <= -68.50){
+//                        if(detector_battery_percent <= 86.50){
+//                            return true;
+//                        }
+//                        else{
+//                            if(RSSI <= -70.50){
+//                                return false;
+//                            }
+//                            else{
+//                                return true;
+//                            }
+//                        }
+//                    }
+//                    else{
+//                        if(detector_battery_percent <= 86.50){
+//                            if(detector_battery_mah <= 3025.50){
+//                                return true;
+//                            }
+//                            else{
+//                                return false;
+//                            }
+//                        }
+//                        else{
+//                            return true;
+//                        }
+//                    }
+//                }
+//            }
+//            else{
+//                if(detector_battery_percent <= 76.50){
+//                    if(detector_battery_percent <= 36.50){
+//                        return true;
+//                    }
+//                    else{
+//                        if(RSSI <= -47.50){
+//                            return false;
+//                        }
+//                        else{
+//                            return true;
+//                        }
+//                    }
+//                }
+//                else{
+//                    return true;
+//                }
+//            }
+//        }
     }
     public static void main(String[] args) {
 
 
     }
 
-    public static ArrayList validate(ArrayList<BluetoothEntry> record){
+    public static ArrayList<Algo_Student_Record> validate(ArrayList<BluetoothEntry> record){
         Map<String, Pair> nodes = new HashMap();
         Map<String, String> association = new HashMap<>();
         for(int i=0; i<record.size(); i++){
@@ -164,10 +162,10 @@ class BluetoothEntry{
 
 class Algo_Student_Record{
     String uid;
-    boolean rssi;
+    boolean isInside;
 
-    public Algo_Student_Record(String uid, boolean rssi) {
+    public Algo_Student_Record(String uid, boolean isInside) {
         this.uid = uid;
-        this.rssi = rssi;
+        this.isInside = isInside;
     }
 }

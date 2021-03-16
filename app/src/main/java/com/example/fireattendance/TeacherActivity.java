@@ -115,6 +115,7 @@ public class TeacherActivity extends AppCompatActivity {
 
     public void addStudent(String text, String status, String bt_name,int battery_mah,int battery_percent,String manufacturer) {
         CustomView v1 = new CustomView(this, text, status);
+        v1.setId(Integer.parseInt(text));
         v1.setOnDeleteListener(listener);
         list.addView(v1);
         final Handler handlerUI = new Handler(Looper.getMainLooper());
@@ -200,7 +201,7 @@ public class TeacherActivity extends AppCompatActivity {
 
                     //Call Validate Function here
 
-                    algo.validate(compileData());
+                    reRenderList(algo.validate(compileData()));
                 }
 
             }
@@ -275,12 +276,12 @@ public class TeacherActivity extends AppCompatActivity {
                     case "MARK":
                         TeacherActivity.this.process_MARK_Message(data);
                         //Call Validate Function here
-                        algo.validate(compileData());
+                        reRenderList(algo.validate(compileData()));
                         break;
                     case "SNIFF":
                         TeacherActivity.this.process_SNIFF_Message(data);
-                        //Call validate FUnction here
-                        algo.validate(compileData());
+                        //Call validate Function here
+                        reRenderList(algo.validate(compileData()));
                         break;
 
                     default:
@@ -588,27 +589,50 @@ public class TeacherActivity extends AppCompatActivity {
         }
     }
 
+    public void reRenderList(ArrayList<Algo_Student_Record> records){
+        for(Algo_Student_Record rec : records){
+
+            if(!rec.isInside){
+                CustomView v = (CustomView) list.findViewById(Integer.parseInt(rec.uid));
+                v.setAttendanceState("warning");
+                v.setOnClickMessage("Outside Proximity");
+                Log.i("INFO", "OUTSIDE OF PROXIMITY " + rec.uid);
+            }
+        }
+    }
+
     public ArrayList<BluetoothEntry> compileData(){
         ArrayList<BluetoothEntry> BleEntry = new ArrayList<>();
         for (BleObs bleobj:this.observations) {
             String target = bleobj.recordee;
             String detector = bleobj.recorder;
             int target_battery_mah = 0,detector_battery_mah= 0,target_battery_percent = 0,detector_battery_percent=0;
+            String target_uid = "";
+            String detector_uid = "";
+
+            if(detector.equals("teacher")){
+                detector_uid = "teacher";
+            }
+
             for (StudentRecord stdobj:this.student) {
                 if(stdobj.bt_name.equals(target)){
                     target_battery_mah = stdobj.battery_mah;
                     target_battery_percent = stdobj.battery_percent;
+                    target_uid = stdobj.uid;
                 }
                 if(stdobj.bt_name.equals((detector))){
                     detector_battery_mah = stdobj.battery_mah;
                     detector_battery_percent = stdobj.battery_percent;
+                    detector_uid = stdobj.uid;
                 }
                 if(target_battery_mah != 0 && detector_battery_mah != 0){
                     break;
                 }
             }
 
-            BleEntry.add(new BluetoothEntry(detector,target,bleobj.rssi,target_battery_mah,target_battery_percent,detector_battery_mah,detector_battery_percent));
+            if(!target_uid.equals("")){
+                BleEntry.add(new BluetoothEntry(detector_uid,target_uid,bleobj.rssi,target_battery_mah,target_battery_percent,detector_battery_mah,detector_battery_percent));
+            }
         }
 
         return BleEntry;
