@@ -16,6 +16,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.BatteryManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -490,20 +492,21 @@ public class StudentActivity extends AppCompatActivity {
         }
     }
 
-    private void send_SNIFF_Message(String btName, short rssi){
+    private void send_SNIFF_Message(String recordee, short rssi){
         try {
-            Log.i("INFO", "PREPARING SNIFF MESSAGE FOR " + btName);
+            Log.i("INFO", "PREPARING SNIFF MESSAGE FOR " + recordee);
 
             JSONObject sniff = new JSONObject();
 
             sniff.put("msg_type" , "SNIFF");
-            sniff.put("bt_name"  , btName);
+            sniff.put("src"  , this.btName );
+            sniff.put("bt_name"  , recordee);
             sniff.put("rssi"     , rssi);
 
             Payload bytesPayload = Payload.fromBytes( sniff.toString().getBytes() );
             StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
 
-            Log.i("INFO", "SENDING SNIFF MESSAGE FOR " + btName);
+            Log.i("INFO", "SENDING SNIFF MESSAGE FOR " + recordee);
         } catch (Exception e) {
             Log.e("INFO", "EXCEPTION WHILE SENDING SNIFF MESSAGE", e);
         }
@@ -574,12 +577,23 @@ public class StudentActivity extends AppCompatActivity {
     private void send_MARK_Message() {
         try {
             JSONObject mark = new JSONObject();
+            IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            Intent batteryStatus = StudentActivity.this.registerReceiver(null, ifilter);
+            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
 
+            float batteryPct = level * 100 / (float)scale;
             mark.put("msg_type" , "MARK");
             mark.put("uid"      , StudentActivity.this.UID);
             mark.put("source"   , StudentActivity.this.self_endpointId);
             mark.put("bt_name"  , StudentActivity.this.btName);
+            //Put Required Details here
+            //Battery and percent , Manufacturer name of sender
+            mark.put("battery_mah",level );
+            mark.put("battery_percent", batteryPct );
+            mark.put("manufacturer_name", Build.MANUFACTURER);
 
+            Log.i("INFO BATTERY", level + "" );
             Payload bytesPayload = Payload.fromBytes( mark.toString().getBytes() );
             StudentActivity.this.mConnectionsClient.sendPayload(StudentActivity.this.sourceEndpoint, bytesPayload);
 
@@ -702,6 +716,16 @@ public class StudentActivity extends AppCompatActivity {
 
         view.setTextSize(18);
         this.studentAttendanceList.addView(view);
+    }
+}
+class StBleObs {
+    String recorder, recordee;
+    int rssi;
+
+    public StBleObs(String recorder, String recordee, int rssi) {
+        this.recorder = recorder;
+        this.recordee = recordee;
+        this.rssi = rssi;
     }
 }
 

@@ -113,7 +113,7 @@ public class TeacherActivity extends AppCompatActivity {
         unregisterReceiver(mBroadcastReceiver1);
     }
 
-    public void addStudent(String text, String status, String bt_name) {
+    public void addStudent(String text, String status, String bt_name,int battery_mah,int battery_percent,String manufacturer) {
         CustomView v1 = new CustomView(this, text, status);
         v1.setOnDeleteListener(listener);
         list.addView(v1);
@@ -124,7 +124,7 @@ public class TeacherActivity extends AppCompatActivity {
             }
         };
         handlerUI.post(r);
-        student.add(new StudentRecord(text, "", bt_name));
+        student.add(new StudentRecord(text, "", bt_name,battery_mah,battery_percent,manufacturer ));
     }
 
     public void manuallyAddStudent(View v) {
@@ -138,7 +138,7 @@ public class TeacherActivity extends AppCompatActivity {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 String value = input.getText().toString();
-                addStudent(value, "new", null);
+                addStudent(value, "new", null,0,0,"");
             }
         });
 
@@ -152,7 +152,7 @@ public class TeacherActivity extends AppCompatActivity {
 
     private boolean hasDiscoveryStopped     = false;
     private boolean hasAttendanceStopped    = false;
-    ArrayList<Pair<String, Short>> observations = new ArrayList<Pair<String, Short>>();
+    ArrayList<BleObs> observations = new ArrayList<BleObs>(); // Stores the RSSI
     private final BroadcastReceiver mBroadcastReceiver1 = new BroadcastReceiver() {
 
         @Override
@@ -195,8 +195,12 @@ public class TeacherActivity extends AppCompatActivity {
 
                 if(device.getName() != null){
                     Log.i("INFO", device.getName() + " - " + rssi);
-                    observations.add(new Pair<String, Short>(device.getName(), rssi));
+                    observations.add(new BleObs("teacher",device.getName(),rssi));
                     Log.i("INFO", "collected " + observations.size() + " rssi observations");
+
+                    //Call Validate Function here
+
+                    algo.validate(compileData());
                 }
 
             }
@@ -270,9 +274,13 @@ public class TeacherActivity extends AppCompatActivity {
                 switch (data.getString("msg_type")) {
                     case "MARK":
                         TeacherActivity.this.process_MARK_Message(data);
+                        //Call Validate Function here
+                        algo.validate(compileData());
                         break;
                     case "SNIFF":
                         TeacherActivity.this.process_SNIFF_Message(data);
+                        //Call validate FUnction here
+                        algo.validate(compileData());
                         break;
 
                     default:
@@ -309,7 +317,7 @@ public class TeacherActivity extends AppCompatActivity {
     private void process_MARK_Message(JSONObject data) {
         // auth code se dekhke authenticate karna hai
         try {
-            TeacherActivity.this.addStudent(data.getString("uid"), "normal", data.getString("bt_name"));
+            TeacherActivity.this.addStudent(data.getString("uid"), "normal", data.getString("bt_name"),data.getInt("battery_mah"),data.getInt("battery_percent"),data.getString("manufacturer_name"));
 
             send_ACK_Message(data.getString("source"), "MARKED:" + getAlphaNumericString(10));
         } catch (Exception e) {
@@ -320,7 +328,7 @@ public class TeacherActivity extends AppCompatActivity {
     private void process_SNIFF_Message(JSONObject data) {
         // auth code se dekhke authenticate karna hai
         try {
-            observations.add(new Pair<String, Short>(data.getString("bt_name"), (short) data.getInt("rssi")));
+            observations.add(new BleObs(data.getString("src"),data.getString("bt_name"),(short) data.getInt("rssi")));
             Log.i("INFO", "collected " + observations.size() + " rssi observations");
         } catch (Exception e) {
             Log.e("INFO", "ERROR WHEN PROCESSING SNIFF", e);
@@ -579,17 +587,59 @@ public class TeacherActivity extends AppCompatActivity {
             }
         }
     }
+
+    public ArrayList<BluetoothEntry> compileData(){
+        ArrayList<BluetoothEntry> BleEntry = new ArrayList<>();
+        for (BleObs bleobj:this.observations) {
+            String target = bleobj.recordee;
+            String detector = bleobj.recorder;
+            int target_battery_mah = 0,detector_battery_mah= 0,target_battery_percent = 0,detector_battery_percent=0;
+            for (StudentRecord stdobj:this.student) {
+                if(stdobj.bt_name.equals(target)){
+                    target_battery_mah = stdobj.battery_mah;
+                    target_battery_percent = stdobj.battery_percent;
+                }
+                if(stdobj.bt_name.equals((detector))){
+                    detector_battery_mah = stdobj.battery_mah;
+                    detector_battery_percent = stdobj.battery_percent;
+                }
+                if(target_battery_mah != 0 && detector_battery_mah != 0){
+                    break;
+                }
+            }
+
+            BleEntry.add(new BluetoothEntry(detector,target,bleobj.rssi,target_battery_mah,target_battery_percent,detector_battery_mah,detector_battery_percent));
+        }
+
+        return BleEntry;
+    }
 }
 
 class StudentRecord{
     String uid;
     String response;
     String bt_name;
-    StudentRecord(String uid, String response, String bt_name){
+    int battery_mah;
+    int battery_percent;
+    String manufacturer_name;
+    // ADD Battery and percent , Manufacturer name of sender
+    StudentRecord(String uid, String response, String bt_name, int battery_mah,int battery_percent, String manufacturer_name ){
         this.uid        = uid;
         this.response   = response;
         this.bt_name    = bt_name;
-
+        this.battery_mah = battery_mah;
+        this.battery_percent = battery_percent;
+        this.manufacturer_name = manufacturer_name;
         Log.i("INFO", "CREATED STUDENT RECORD FOR " + uid + " " + bt_name);
+    }
+}
+class BleObs {
+    String recorder, recordee;
+    int rssi;
+
+    public BleObs(String recorder, String recordee, int rssi) {
+        this.recorder = recorder;
+        this.recordee = recordee;
+        this.rssi = rssi;
     }
 }
